@@ -1,4 +1,4 @@
-# car.py
+# car.py - VERSI DENGAN FISIKA LEBIH BAIK
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -8,44 +8,41 @@ class Car:
         self.x = 0.0
         self.y = 0.3
         self.z = 0.0
-        self.speed = 1.5  # ⭐ LAMBAT SAJA
-        self.max_speed = 30.0
-        self.acceleration = 0.3
-        self.brake_power = 0.8
+        self.speed = 0.0  # Mulai dari diam
+        self.max_speed = 50.0
+        self.acceleration = 2.0  # Akselerasi lebih kuat
+        self.brake_power = 3.0  # Rem lebih kuat
         self.steering_angle = 0.0
-        self.max_steering = 40.0
-        self.direction = 0.0
+        self.max_steering = 45.0
+        self.direction = 0.0  # Arah mobil (derajat)
         self.wheel_rotation = 0.0
-        self.wheel_angle = 0.0
-        self.auto_mode = True  # Mode otomatis jalan lurus
+        self.wheel_angle = 0.0  # Sudut roda depan
+        self.auto_mode = False  # Manual mode
         
-        # Warna sederhana
-        self.body_color = [0.2, 0.5, 0.8, 1.0]      # Biru
-        self.wheel_color = [0.1, 0.1, 0.1, 1.0]     # Hitam untuk ban
-        self.rim_color = [0.7, 0.7, 0.7, 1.0]       # Silver untuk velg
-        self.window_color = [0.5, 0.7, 0.9, 0.5]    # Kaca biru transparan
-        self.headlight_color = [1.0, 0.9, 0.6, 1.0] # Kuning untuk lampu
-        self.taillight_color = [0.9, 0.1, 0.1, 1.0] # Merah untuk lampu belakang
+        # Warna
+        self.body_color = [0.2, 0.5, 0.8, 1.0]
+        self.wheel_color = [0.1, 0.1, 0.1, 1.0]
+        self.rim_color = [0.7, 0.7, 0.7, 1.0]
+        self.window_color = [0.5, 0.7, 0.9, 0.5]
+        self.headlight_color = [1.0, 0.9, 0.6, 1.0]
+        self.taillight_color = [0.9, 0.1, 0.1, 1.0]
     
     def toggle_auto_mode(self):
-        """Toggle mode otomatis"""
         self.auto_mode = not self.auto_mode
         print(f"Auto mode: {'ON' if self.auto_mode else 'OFF'}")
     
     def move_forward(self):
-        if not self.auto_mode:  # Hanya jika manual mode
-            self.speed = min(self.speed + self.acceleration, self.max_speed)
+        self.speed = min(self.speed + self.acceleration, self.max_speed)
     
     def move_backward(self):
-        if not self.auto_mode:
-            self.speed = max(self.speed - self.acceleration, -self.max_speed/3)
+        self.speed = max(self.speed - self.acceleration, -self.max_speed/2)
     
     def turn_left(self):
-        self.steering_angle = min(self.steering_angle + 2.0, self.max_steering)
+        self.steering_angle = min(self.steering_angle + 3.0, self.max_steering)
         self.wheel_angle = self.steering_angle
     
     def turn_right(self):
-        self.steering_angle = max(self.steering_angle - 2.0, -self.max_steering)
+        self.steering_angle = max(self.steering_angle - 3.0, -self.max_steering)
         self.wheel_angle = self.steering_angle
     
     def brake(self):
@@ -57,47 +54,87 @@ class Car:
     def reset_position(self):
         self.x = 0.0
         self.z = 0.0
-        self.speed = 1.5
+        self.speed = 0.0
         self.direction = 0.0
         self.steering_angle = 0.0
+        self.wheel_angle = 0.0
     
-    def update(self):
-        # ⭐ AUTO MODE: Jalan lurus pelan-pelan
-        if self.auto_mode:
-            if self.speed < 8.0:  # ⭐ KECEPATAN SANGAT LAMBAT
-                self.speed = min(self.speed + 0.05, 8.0)
+    def check_collision(self, new_x, new_z, buildings):
+        """Simple collision detection - returns True if collision"""
+        car_radius = 1.0  # Ukuran setengah body mobil
         
-        # Update posisi
-        if abs(self.speed) > 0.05:
-            dir_rad = np.radians(self.direction)
-            self.x += self.speed * np.sin(dir_rad) * 0.1
-            self.z += self.speed * np.cos(dir_rad) * 0.1
+        for b in buildings:
+            # Building bounds
+            min_x = b['x'] - b['width']/2 - car_radius
+            max_x = b['x'] + b['width']/2 + car_radius
+            min_z = b['z'] - b['depth']/2 - car_radius
+            max_z = b['z'] + b['depth']/2 + car_radius
             
-            # Update arah berdasarkan steering
-            if abs(self.steering_angle) > 1.0:
-                turn_factor = self.speed * 0.015  # ⭐ BELOK PELAN
-                self.direction += self.steering_angle * turn_factor
+            if min_x < new_x < max_x and min_z < new_z < max_z:
+                return True
+        return False
+        
+    def update(self, buildings=None):
+        # FISIKA MOBIL YANG LEBIH BAIK
+        if abs(self.speed) > 0.01:  # Hanya jika bergerak
+            # Update posisi berdasarkan arah dan kecepatan
+            dir_rad = np.radians(self.direction)
+            move_factor = 0.08  # Faktor gerakan
+            
+            # Hitung calon posisi baru
+            dx = self.speed * np.sin(dir_rad) * move_factor
+            dz = self.speed * np.cos(dir_rad) * move_factor
+            
+            new_x = self.x + dx
+            new_z = self.z + dz
+            
+            # Cek collision jika daftar gedung diberikan
+            collision = False
+            if buildings:
+                if self.check_collision(new_x, new_z, buildings):
+                    collision = True
+                    # Tabrakan! Berhenti dan mental sedikit
+                    self.speed = -self.speed * 0.3
+            
+            if not collision:
+                self.x = new_x
+                self.z = new_z
+            
+            # BELOKAN MOBIL berdasarkan steering
+            if abs(self.steering_angle) > 0.5:
+                # Mobil belok lebih tajam saat lebih pelan
+                turn_speed = 0.8 * (abs(self.speed) / 20.0)  # Adjust factor
+                turn_speed = max(turn_speed, 0.1)  # Minimum turning
+                
+                if self.speed > 0:  # Maju
+                    self.direction += self.steering_angle * turn_speed
+                else:  # Mundur - belok terbalik
+                    self.direction -= self.steering_angle * turn_speed
+                
                 self.direction %= 360
         
         # Steering slowly returns to center
-        if abs(self.steering_angle) > 0.5:
-            self.steering_angle *= 0.9
-        else:
+        self.steering_angle *= 0.85
+        if abs(self.steering_angle) < 0.5:
             self.steering_angle = 0.0
+            self.wheel_angle = 0.0
         
-        # Natural deceleration
-        if abs(self.speed) > 0.1:
-            self.speed *= 0.98
-        elif not self.auto_mode:
-            self.speed = 0.0
+        # Natural deceleration (drag)
+        if abs(self.speed) > 0.05:
+            self.speed *= 0.985  # Sedikit drag
     
     def update_wheel_rotation(self, delta_time):
-        # Animasi putaran roda yang realistis
-        wheel_radius = 0.35  # Radius roda
-        wheel_circumference = 2.0 * np.pi * wheel_radius
-        distance_per_second = self.speed * 0.2778  # km/h to m/s
-        rotation_per_second = distance_per_second / wheel_circumference
-        self.wheel_rotation += rotation_per_second * 360 * delta_time
+        """Animasi putaran roda"""
+        if delta_time > 0 and abs(self.speed) > 0.1:
+            # Formula sederhana: 10 km/h = 1 rotasi per detik
+            rotation_speed = self.speed * 36.0 * delta_time
+            
+            if self.speed > 0:
+                self.wheel_rotation += rotation_speed
+            elif self.speed < 0:
+                self.wheel_rotation -= rotation_speed
+            
+            self.wheel_rotation %= 360.0
     
     # ==================== FUNGSI BANTUAN ====================
     
@@ -129,37 +166,79 @@ class Car:
         glEnd()
     
     def draw_wheel(self, x_offset, z_offset, is_front=True):
-        """Draw roda yang proper dengan ban dan velg"""
+        """Draw roda"""
         glPushMatrix()
         glTranslatef(x_offset, 0.3, z_offset)
         
         # Roda depan bisa berbelok
         if is_front:
             glRotatef(self.wheel_angle, 0, 1, 0)
-        
-        # Putaran roda (mengelilingi sumbu X)
-        glRotatef(self.wheel_rotation, 1, 0, 0)
-        
+      
+        # Mobil menghadap ke arah Z+, roda perlu menghadap ke samping (sumbu X)
+        glRotatef(90, 0, 1, 0)  # Putar 90 derajat
+
+        # Rotasi roda mengelilingi sumbu Z (yang sekarang menjadi sumbu depan roda)
+        glRotatef(self.wheel_rotation, 0, 0, 1)
+
         # ===== BAN =====
-        glColor4fv(self.wheel_color)  # Hitam
-        self.draw_cylinder(0.35, 0.22, 24)  # Radius 0.35, tebal 0.22
+        glColor4fv(self.wheel_color)
+        self.draw_cylinder_for_wheel(0.35, 0.22, 24)
         
         # ===== VELG =====
         glPushMatrix()
-        glColor4fv(self.rim_color)  # Silver
+        glColor4fv(self.rim_color)
         
-        # Velg sebagai disk
-        self.draw_disk(0.25, 0.05, 16)
+        # Velg depan
+        glBegin(GL_TRIANGLE_FAN)
+        glNormal3f(0, 0, 1)
+        glVertex3f(0, 0, 0.12)
+        for i in range(25):
+            angle = 2.0 * np.pi * i / 24
+            x = 0.25 * np.cos(angle)
+            y = 0.25 * np.sin(angle)
+            glVertex3f(x, y, 0.12)
+        glEnd()
         
-        # Center hub (tutup tengah)
-        glColor3f(0.4, 0.4, 0.4)
-        self.draw_disk(0.08, 0.06, 8)
+        # Velg belakang
+        glBegin(GL_TRIANGLE_FAN)
+        glNormal3f(0, 0, -1)
+        glVertex3f(0, 0, -0.12)
+        for i in range(25):
+            angle = 2.0 * np.pi * i / 24
+            x = 0.25 * np.cos(angle)
+            y = 0.25 * np.sin(angle)
+            glVertex3f(x, y, -0.12)
+        glEnd()
+        
+        # Pusat velg
+        glColor3f(0.5, 0.5, 0.5)
+        glBegin(GL_TRIANGLE_FAN)
+        glNormal3f(0, 0, 1)
+        glVertex3f(0, 0, 0.125)
+        for i in range(17):
+            angle = 2.0 * np.pi * i / 16
+            x = 0.08 * np.cos(angle)
+            y = 0.08 * np.sin(angle)
+            glVertex3f(x, y, 0.125)
+        glEnd()
+        
+        glBegin(GL_TRIANGLE_FAN)
+        glNormal3f(0, 0, -1)
+        glVertex3f(0, 0, -0.125)
+        for i in range(17):
+            angle = 2.0 * np.pi * i / 16
+            x = 0.08 * np.cos(angle)
+            y = 0.08 * np.sin(angle)
+            glVertex3f(x, y, -0.125)
+        glEnd()
         
         glPopMatrix()
         glPopMatrix()
     
-    def draw_cylinder(self, radius, height, segments=16):
-        """Draw cylinder untuk ban"""
+    def draw_cylinder_for_wheel(self, radius, height, segments=16):
+        """Draw cylinder khusus untuk roda"""
+        half_height = height / 2.0
+        
         # Sisi samping
         glBegin(GL_QUAD_STRIP)
         for i in range(segments + 1):
@@ -168,56 +247,30 @@ class Car:
             y = radius * np.sin(angle)
             
             glNormal3f(np.cos(angle), np.sin(angle), 0)
-            glVertex3f(x, y, height/2)
-            glVertex3f(x, y, -height/2)
+            glVertex3f(x, y, half_height)
+            glVertex3f(x, y, -half_height)
         glEnd()
         
-        # Tutup atas
+        # Tutup depan (luar)
         glBegin(GL_TRIANGLE_FAN)
         glNormal3f(0, 0, 1)
-        glVertex3f(0, 0, height/2)
-        for i in range(segments + 1):
-            angle = 2.0 * np.pi * i / segments
-            glVertex3f(radius * np.cos(angle), radius * np.sin(angle), height/2)
-        glEnd()
-        
-        # Tutup bawah
-        glBegin(GL_TRIANGLE_FAN)
-        glNormal3f(0, 0, -1)
-        glVertex3f(0, 0, -height/2)
-        for i in range(segments + 1):
-            angle = 2.0 * np.pi * i / segments
-            glVertex3f(radius * np.cos(angle), radius * np.sin(angle), -height/2)
-        glEnd()
-    
-    def draw_disk(self, radius, thickness, segments=16):
-        """Draw disk pipih untuk velg"""
-        # Atas
-        glBegin(GL_TRIANGLE_FAN)
-        glNormal3f(0, 0, 1)
-        glVertex3f(0, 0, thickness/2)
-        for i in range(segments + 1):
-            angle = 2.0 * np.pi * i / segments
-            glVertex3f(radius * np.cos(angle), radius * np.sin(angle), thickness/2)
-        glEnd()
-        
-        # Bawah
-        glBegin(GL_TRIANGLE_FAN)
-        glNormal3f(0, 0, -1)
-        glVertex3f(0, 0, -thickness/2)
-        for i in range(segments + 1):
-            angle = 2.0 * np.pi * i / segments
-            glVertex3f(radius * np.cos(angle), radius * np.sin(angle), -thickness/2)
-        glEnd()
-        
-        # Sisi samping
-        glBegin(GL_QUAD_STRIP)
+        glVertex3f(0, 0, half_height)
         for i in range(segments + 1):
             angle = 2.0 * np.pi * i / segments
             x = radius * np.cos(angle)
             y = radius * np.sin(angle)
-            glVertex3f(x, y, thickness/2)
-            glVertex3f(x, y, -thickness/2)
+            glVertex3f(x, y, half_height)
+        glEnd()
+        
+        # Tutup belakang (dalam)
+        glBegin(GL_TRIANGLE_FAN)
+        glNormal3f(0, 0, -1)
+        glVertex3f(0, 0, -half_height)
+        for i in range(segments + 1):
+            angle = 2.0 * np.pi * i / segments
+            x = radius * np.cos(angle)
+            y = radius * np.sin(angle)
+            glVertex3f(x, y, -half_height)
         glEnd()
     
     # ==================== RENDER MOBIL ====================
@@ -331,14 +384,20 @@ class Car:
         glPushMatrix()
         glTranslatef(0.45, 0.5, 1.48)
         glScalef(0.12, 0.12, 0.1)
+        # Headlight glow
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.8, 0.6, 1.0])
         self.draw_rect(1, 1, 1)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
         
         # Lampu depan kanan
         glPushMatrix()
         glTranslatef(-0.45, 0.5, 1.48)
         glScalef(0.12, 0.12, 0.1)
+        # Headlight glow
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.8, 0.6, 1.0])
         self.draw_rect(1, 1, 1)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
         
         # Lampu belakang kiri
@@ -346,14 +405,20 @@ class Car:
         glPushMatrix()
         glTranslatef(0.4, 0.5, -1.48)
         glScalef(0.1, 0.18, 0.1)
+        # Taillight glow
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.0, 0.0, 1.0])
         self.draw_rect(1, 1, 1)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
         
         # Lampu belakang kanan
         glPushMatrix()
         glTranslatef(-0.4, 0.5, -1.48)
         glScalef(0.1, 0.18, 0.1)
+        # Taillight glow
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.0, 0.0, 1.0])
         self.draw_rect(1, 1, 1)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
         
         # ===== RODA 4 =====

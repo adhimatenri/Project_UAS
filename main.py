@@ -1,14 +1,13 @@
+# main.py
 import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
-import os
 from car import Car
 from city import City
 from road import Road
 from camera import Camera
-from PIL import Image
 
 class CitySimulation:
     def __init__(self, width=1280, height=720):
@@ -18,38 +17,37 @@ class CitySimulation:
         self.city = City()
         self.road = Road()
         self.camera = Camera()
-        self.textures = {}
         self.light_position = [50.0, 50.0, 50.0, 1.0]
         self.light_color = [1.0, 1.0, 1.0, 1.0]
-        self.last_print_time = 0
         self.frame_count = 0
         self.running = True
         
-        # Initialize PyGame (tanpa GLFW!)
+        # Initialize PyGame
         pygame.init()
         pygame.display.set_mode(
             (width, height), 
             pygame.OPENGL | pygame.DOUBLEBUF
         )
-        pygame.display.set_caption("3D City Simulation")
+        pygame.display.set_caption("3D City Simulation - Mobil Interaktif")
         
-        # Initialize font untuk info (opsional)
+        # Initialize font untuk info
         pygame.font.init()
         self.font = pygame.font.SysFont('Arial', 20)
         
         self.init_opengl()
-        self.load_textures()
         
         print("\n" + "="*80)
-        print("3D CITY SIMULATION - CONTROLS")
+        print("3D CITY SIMULATION - KONTROL")
         print("="*80)
-        print("W/S - Accelerate/Brake")
-        print("A/D - Steer Left/Right")
-        print("SPACE - Emergency Brake")
-        print("1/2/3 - Camera Views (Follow/Top/Free)")
-        print("R - Reset Position")
-        print("Arrow Keys - Move Camera (Free mode only)")
-        print("ESC - Exit")
+        print("W/S - Gas/Rem")
+        print("A/D - Belok Kiri/Kanan")
+        print("SPACE - Rem Darurat")
+        print("1/2/3/4 - Mode Kamera (Follow/Top/Free/Side)")
+        print("R - Reset Posisi")
+        print("Panah Atas/Bawah - Naik/Turun Kamera (Free mode)")
+        print("Panah Kiri/Kanan - Putar Kamera (Free mode)")
+        print("PageUp/PageDown - Zoom In/Out (Free mode)")
+        print("ESC - Keluar")
         print("="*80)
         
     def init_opengl(self):
@@ -57,9 +55,9 @@ class CitySimulation:
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         glEnable(GL_COLOR_MATERIAL)
-        glEnable(GL_TEXTURE_2D)
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
-        glClearColor(0.53, 0.81, 0.98, 1.0)
+        # Night Mode Background
+        glClearColor(0.05, 0.05, 0.2, 1.0)  # Warna langit malam (biru gelap)
     
     def handle_events(self):
         """Handle keyboard events dengan PyGame"""
@@ -73,8 +71,7 @@ class CitySimulation:
                     self.running = False
                     return
                 elif event.key == pygame.K_o:
-                    self.car.auto_mode = not self.car.auto_mode
-                    print(f"Auto mode: {'ON' if self.car.auto_mode else 'OFF'}")
+                    self.car.toggle_auto_mode()
                 
                 # Kontrol mobil
                 elif event.key == pygame.K_w:
@@ -93,15 +90,20 @@ class CitySimulation:
                 # Kontrol kamera
                 elif event.key == pygame.K_1:
                     self.camera.set_mode('follow')
-                    print("Camera: Follow mode")
                 elif event.key == pygame.K_2:
                     self.camera.set_mode('top')
-                    print("Camera: Top view mode")
                 elif event.key == pygame.K_3:
                     self.camera.set_mode('free')
-                    print("Camera: Free mode")
+                elif event.key == pygame.K_4:
+                    self.camera.set_mode('side')
+                
+                # Kontrol zoom (free mode only)
+                elif event.key == pygame.K_PAGEUP:
+                    self.camera.zoom_in()
+                elif event.key == pygame.K_PAGEDOWN:
+                    self.camera.zoom_out()
         
-        # Handle key holds (untuk arrow keys)
+        # Handle key holds (untuk arrow keys di free mode)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_UP]:
             self.camera.move_forward()
@@ -112,10 +114,6 @@ class CitySimulation:
         if keys[pygame.K_RIGHT]:
             self.camera.turn_right()
     
-    def load_textures(self):
-        # ... (sama seperti sebelumnya, tanpa perubahan)
-        pass
-    
     def setup_projection(self):
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -123,10 +121,11 @@ class CitySimulation:
         glMatrixMode(GL_MODELVIEW)
     
     def setup_lighting(self):
+        # Moonlight (Bluish, lower intensity)
         glLightfv(GL_LIGHT0, GL_POSITION, self.light_position)
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, self.light_color)
-        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
-        glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.4, 0.4, 0.7, 1.0]) # Cahaya bulan kebiruan
+        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.2, 1.0]) # Ambient gelap
+        glLightfv(GL_LIGHT0, GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
     
     def render(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -150,30 +149,37 @@ class CitySimulation:
         self.road.render()
         self.city.render()
         
-        # Update dan gambar mobil
-        self.car.update()
+        # Update dan gambar mobil - PASS BUILDINGS FOR COLLISION
+        self.car.update(self.city.buildings)
         self.car.render()
         
         # UI informasi
         self.draw_ui()
+        
+        # Debug info di terminal
+        if self.frame_count % 180 == 0:  # Setiap 3 detik
+            self.print_debug_info()
     
     def draw_grid(self, size=100, step=10):
+        """Draw grid untuk membantu visualisasi 3D"""
         glBegin(GL_LINES)
         glColor3f(0.5, 0.5, 0.5)
         for i in range(-size, size+1, step):
+            # Garis sejajar sumbu X
             glVertex3f(i, 0, -size)
             glVertex3f(i, 0, size)
+            # Garis sejajar sumbu Z
             glVertex3f(-size, 0, i)
             glVertex3f(size, 0, i)
         glEnd()
     
     def draw_ui(self):
-        """Draw UI dengan PyGame font (lebih mudah!)"""
-        # Switch ke orthographic
+        """Draw UI dengan PyGame font - VERSI FIXED (tidak terbalik)"""
+        # Switch ke orthographic projection untuk 2D UI
         glMatrixMode(GL_PROJECTION)
         glPushMatrix()
         glLoadIdentity()
-        glOrtho(0, self.width, self.height, -1,0, 1)
+        gluOrtho2D(0, self.width, self.height, 0)
         
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
@@ -182,51 +188,58 @@ class CitySimulation:
         glDisable(GL_LIGHTING)
         glDisable(GL_DEPTH_TEST)
         
-        # Render text dengan PyGame
+        # Render text informasi
+        # --- OPTIMIZED TEXT RENDERING ---
+        # Cache text textures if not dynamic or only update when needed
+        # For simplicity in this assignment context, we'll keep it direct but ensure cleanup
+        # Note: In a larger app, we would cache these textures in __init__ or update only on change.
+        
         info_lines = [
-            f"Position: X={self.car.x:.1f}, Z={self.car.z:.1f}",
-            f"Speed: {abs(self.car.speed):.1f} km/h",
-            f"Camera: {self.camera.mode}",
-            "WASD: Drive | 1/2/3: Camera | R: Reset | ESC: Exit"
+            f"Posisi: X={self.car.x:6.1f}, Z={self.car.z:6.1f}",
+            f"Kecepatan: {abs(self.car.speed):5.1f} km/h",
+            f"Kamera: {self.camera.mode.upper()}",
+            f"Arah: {self.car.direction:.1f}°",
+            "WASD: Mengemudi | 1/2/3/4: Kamera | R: Reset | ESC: Keluar"
         ]
         
+        if self.camera.mode == 'free':
+            info_lines.append(f"Free Cam: Sudut={self.camera.free_camera_angle:.1f}°, Tinggi={self.camera.free_camera_height:.1f}")
+            
         for i, line in enumerate(info_lines):
             text_surface = self.font.render(line, True, (255, 255, 255))
             text_data = pygame.image.tostring(text_surface, "RGBA", True)
-            
             w, h = text_surface.get_size()
             
-            # Buat texture
             tex_id = glGenTextures(1)
             glBindTexture(GL_TEXTURE_2D, tex_id)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, 
-                        GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
             
-            # Gambar texture
             glEnable(GL_TEXTURE_2D)
             glEnable(GL_BLEND)
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             
             glColor3f(1, 1, 1)
             glBegin(GL_QUADS)
-            glTexCoord2f(0, 1); glVertex2f(10, 30 + i*25)
-            glTexCoord2f(1, 1); glVertex2f(10 + w, 30 + i*25)
-            glTexCoord2f(1, 0); glVertex2f(10 + w, 30 + i*25 + h)
-            glTexCoord2f(0, 1); glVertex2f(10, 30 + i*25 + h)
+            glTexCoord2f(0, 1); glVertex2f(10, 10 + i*25)
+            glTexCoord2f(1, 1); glVertex2f(10 + w, 10 + i*25)
+            glTexCoord2f(1, 0); glVertex2f(10 + w, 10 + i*25 + h)
+            glTexCoord2f(0, 0); glVertex2f(10, 10 + i*25 + h)
             glEnd()
             
             glDisable(GL_BLEND)
             glDisable(GL_TEXTURE_2D)
+            
+            # CRITICAL: Delete texture to prevent memory leak
             glDeleteTextures([tex_id])
         
-        # Speed bar (graphics)
+        # Speed bar (progress bar visual)
         speed_percent = min(abs(self.car.speed) / self.car.max_speed, 1.0)
         bar_width = 200
-        bar_height = 20
+        bar_height = 15
         
-        # Background bar
+        # Background bar (abu-abu)
         glColor3f(0.3, 0.3, 0.3)
         glBegin(GL_QUADS)
         glVertex2f(self.width - bar_width - 20, 30)
@@ -235,7 +248,7 @@ class CitySimulation:
         glVertex2f(self.width - bar_width - 20, 30 + bar_height)
         glEnd()
         
-        # Fill bar (green to red)
+        # Fill bar (hijau ke merah berdasarkan kecepatan)
         r = min(1.0, speed_percent * 2)
         g = min(1.0, 2.0 - speed_percent * 2)
         glColor3f(r, g, 0.0)
@@ -246,6 +259,36 @@ class CitySimulation:
         glVertex2f(self.width - bar_width - 20, 30 + bar_height)
         glEnd()
         
+        # Speed text di samping bar
+        speed_text = f"{abs(self.car.speed):.1f} km/h"
+        speed_surface = self.font.render(speed_text, True, (255, 255, 255))
+        speed_data = pygame.image.tostring(speed_surface, "RGBA", True)
+        speed_w, speed_h = speed_surface.get_size()
+        
+        tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, speed_w, speed_h, 0, 
+                    GL_RGBA, GL_UNSIGNED_BYTE, speed_data)
+        
+        glEnable(GL_TEXTURE_2D)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        
+        glColor3f(1, 1, 1)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 1); glVertex2f(self.width - bar_width - 20, 50)
+        glTexCoord2f(1, 1); glVertex2f(self.width - bar_width - 20 + speed_w, 50)
+        glTexCoord2f(1, 0); glVertex2f(self.width - bar_width - 20 + speed_w, 50 + speed_h)
+        glTexCoord2f(0, 0); glVertex2f(self.width - bar_width - 20, 50 + speed_h)
+        glEnd()
+        
+        glDisable(GL_BLEND)
+        glDisable(GL_TEXTURE_2D)
+        glDeleteTextures([tex_id])
+        
+        # Restore 3D settings
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
         
@@ -254,32 +297,56 @@ class CitySimulation:
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
     
+    def print_debug_info(self):
+        """Print debug info ke terminal untuk troubleshooting"""
+        print(f"\n=== INFO SIMULASI ===")
+        print(f"Posisi Mobil: X={self.car.x:.1f}, Z={self.car.z:.1f}")
+        print(f"Kecepatan: {self.car.speed:.1f} km/h")
+        print(f"Rotasi Roda: {self.car.wheel_rotation:.1f}°")
+        print(f"Mode Kamera: {self.camera.mode}")
+        print(f"Auto Mode: {'ON' if self.car.auto_mode else 'OFF'}")
+    
     def run(self):
+        """Main game loop"""
         clock = pygame.time.Clock()
+        last_time = pygame.time.get_ticks()
+        
+        print("\n🚗 Simulasi 3D Kota dengan Mobil Interaktif")
+        print("🔧 Loading selesai! Mobil siap dikendarai...")
         
         while self.running:
-            # Handle events
+            # Hitung delta_time untuk animasi yang smooth
+            current_time = pygame.time.get_ticks()
+            delta_time = (current_time - last_time) / 1000.0  # Konversi ke detik
+            last_time = current_time
+            
+            # Handle input events
             self.handle_events()
             
-            # Update time-based animations
-            delta_time = clock.tick(60) / 1000.0  # Convert to seconds
-            self.car.update_wheel_rotation(delta_time)
+            # Update animasi roda dengan delta_time
+            if delta_time > 0:
+                self.car.update_wheel_rotation(delta_time)
             
-            # Print info ke terminal setiap 60 frame
+            # Update frame count
             self.frame_count += 1
-            if self.frame_count % 60 == 0:
-                print(f"\rCar: X={self.car.x:6.1f}, Z={self.car.z:6.1f}, "
-                      f"Speed={self.car.speed:5.1f} km/h", end="")
             
             # Render frame
             self.render()
             
             # Swap buffers
             pygame.display.flip()
+            
+            # Cap at 60 FPS
+            clock.tick(60)
         
         pygame.quit()
-        print("\n\nSimulation closed.")
+        print("\n✅ Simulasi ditutup dengan sukses!")
 
 if __name__ == "__main__":
-    simulation = CitySimulation()
-    simulation.run()
+    try:
+        simulation = CitySimulation()
+        simulation.run()
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        print("Pastikan semua library terinstall:")
+        print("pip install pygame numpy PyOpenGL Pillow")
