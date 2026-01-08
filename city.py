@@ -269,60 +269,22 @@ class City:
             glPopMatrix()
     
     def draw_single_street_light(self):
-        # MANUAL POLE DRAWING WITH GRADIENT (Tiang dengan efek cahaya)
-        # Replaces simple cube scaling to allow vertex coloring
-        
-        w = 0.05 # Half width (matches 0.1 scale)
-        h_top = 4.0
-        h_bot = -4.0
-        
-        # Colors
-        c_dark = [0.2, 0.2, 0.2]      # Bottom (Dark)
-        c_lit = [1.0, 1.0, 0.5]       # Top (Illuminated by lamp)
-        
-        glBegin(GL_QUADS)
-        # Front
-        glNormal3f(0, 0, 1)
-        glColor3fv(c_dark); glVertex3f(-w, h_bot, w); glVertex3f(w, h_bot, w)
-        glColor3fv(c_lit);  glVertex3f(w, h_top, w); glVertex3f(-w, h_top, w)
-        
-        # Back
-        glNormal3f(0, 0, -1)
-        glColor3fv(c_dark); glVertex3f(w, h_bot, -w); glVertex3f(-w, h_bot, -w)
-        glColor3fv(c_lit);  glVertex3f(-w, h_top, -w); glVertex3f(w, h_top, -w)
-        
-        # Right
-        glNormal3f(1, 0, 0)
-        glColor3fv(c_dark); glVertex3f(w, h_bot, -w); glVertex3f(w, h_bot, w)
-        glColor3fv(c_lit);  glVertex3f(w, h_top, w); glVertex3f(w, h_top, -w)
-        
-        # Left
-        glNormal3f(-1, 0, 0)
-        glColor3fv(c_dark); glVertex3f(-w, h_bot, w); glVertex3f(-w, h_bot, -w)
-        glColor3fv(c_lit);  glVertex3f(-w, h_top, -w); glVertex3f(-w, h_top, w)
-        glEnd()
+        # Tiang
+        glColor3f(0.3, 0.3, 0.3)
+        glPushMatrix()
+        glScalef(0.1, 8.0, 0.1)
+        self.draw_cube(1, 1, 1)
+        glPopMatrix()
         
         # Kepala lampu
         glPushMatrix()
         glTranslatef(0, 4.0, 0)
         
-        # 1. Bulb (Intense Center)
+        # Efek menyala kuning (Emissive)
         glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 1.0, 0.0, 1.0])
         glColor3f(1.0, 1.0, 0.0)
+        
         self.draw_sphere(0.5)
-        
-        # 2. Glow Halo (Transparent Outer Sphere)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE) # Additive blending creates "glow"
-        glDepthMask(GL_FALSE) # Don't write key to depth buffer
-        
-        glColor4f(1.0, 0.8, 0.0, 0.2) # Yellowish transparent
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.5, 0.4, 0.0, 1.0])
-        self.draw_sphere(1.5) # Larger radius
-        
-        glDepthMask(GL_TRUE)
-        glDisable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Reset default
         
         # Reset emission
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
