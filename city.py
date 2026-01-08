@@ -11,6 +11,7 @@ class City:
         self.generate_stars()
     
     def generate_buildings(self):
+
         for i in range(-50, 51, 20):
             for j in range(-50, 51, 20):
                 if abs(i) < 10 and abs(j) < 100:
@@ -213,6 +214,7 @@ class City:
     
     def draw_single_street_light(self):
         # Tiang
+        glColor3f(0.3, 0.3, 0.3)
         glPushMatrix()
         glScalef(0.1, 8.0, 0.1)
         self.draw_cube(1, 1, 1)
@@ -220,7 +222,14 @@ class City:
         
         # Kepala lampu
         glPushMatrix()
-        glTranslatef(0, 8, 0)
-        glColor3f(1.0, 1.0, 0.8)
+        glTranslatef(0, 4.0, 0)
+        
+        # Efek menyala kuning (Emissive)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 1.0, 0.0, 1.0])
+        glColor3f(1.0, 1.0, 0.0)
+        
         self.draw_sphere(0.5)
+        
+        # Reset emission
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
