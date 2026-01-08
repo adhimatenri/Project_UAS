@@ -11,15 +11,30 @@ class City:
         self.generate_stars()
     
     def generate_buildings(self):
-
-        for i in range(-50, 51, 20):
-            for j in range(-50, 51, 20):
-                if abs(i) < 10 and abs(j) < 100:
-                    continue
+        # Adjusted to strictly avoid road overlap using coordinate checks
+        for i in range(-60, 61, 15):
+            for j in range(-60, 61, 20):
                 
-                height = random.uniform(5, 30)
                 width = random.uniform(3, 8)
+                height = random.uniform(5, 30)
                 depth = random.uniform(3, 8)
+                
+                # Generate exact position first
+                noise_x = random.uniform(-5, 5)
+                noise_z = random.uniform(-5, 5)
+                
+                cand_x = i + noise_x
+                cand_z = j + noise_z
+                
+                # ROAD SAFE ZONE CHECK
+                # Road width=15, Sidewalk extends to ~10.5. 
+                # Exact sidewalk edge is 10.5.
+                
+                min_x = cand_x - width/2
+                max_x = cand_x + width/2
+                
+                if max_x > -10.5 and min_x < 10.5:
+                    continue
                 
                 color = [
                     random.uniform(0.3, 0.8),
@@ -29,8 +44,8 @@ class City:
                 ]
                 
                 self.buildings.append({
-                    'x': i + random.uniform(-5, 5),
-                    'z': j + random.uniform(-5, 5),
+                    'x': cand_x,
+                    'z': cand_z,
                     'width': width,
                     'height': height,
                     'depth': depth,
@@ -90,31 +105,72 @@ class City:
         glPopMatrix()
     
     def draw_windows(self, building):
-        glColor3f(0.8, 0.9, 1.0)
+        # Window settings
+        win_size = 0.6  # Enlarged from ~0.2
+        win_depth = 0.1
         
-        window_count = 3
-        for i in range(window_count):
-            for j in range(2):
-                glPushMatrix()
-                x_pos = (j - 0.5) * (building['width'] * 0.6)
-                y_pos = (i - 1) * (building['height'] * 0.25)
-                glTranslatef(x_pos, y_pos, building['depth']/2 + 0.1)
-                glScalef(0.2, 0.2, 0.1)
+        # Iterate over 2 sides only: 0=Front, 2=Back (Searah dengan jalan/Z-axis)
+        for side in [0, 2]:
+            glPushMatrix()
+            
+            # Rotate to the correct side
+            glRotatef(side * 90, 0, 1, 0)
+            
+            # Determine face dimensions based on side
+            # 0 & 2 (Front/Back) use width for horizontal spacing, depth for distance
+            if side % 2 == 0:
+                face_width = building['width']
+                face_dist = building['depth'] / 2.0
+            else:
+                # Should not happen in this loop but kept for logic
+                face_width = building['depth']
+                face_dist = building['width'] / 2.0
                 
-                # Random "lights on" effect
-                # We use hash or determinism based on coordinates so it doesn't flicker
-                import hashlib
-                win_hash = int(hashlib.md5(f"{building['x']}{building['z']}{i}{j}".encode()).hexdigest(), 16)
-                if win_hash % 3 == 0: # 1 in 3 windows is lit
-                    glMaterialfv(GL_FRONT, GL_EMISSION, [0.5, 0.5, 0.3, 1.0])
-                    glColor3f(1.0, 1.0, 0.5) # Yellowish light
-                else:
-                    glColor3f(0.2, 0.2, 0.3) # Dark window
-                
-                self.draw_cube(1, 1, 1)
-                # Reset emission
-                glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
-                glPopMatrix()
+            # Logic for window placement on this face
+            # Calculate how many windows fit horizontally and vertically
+            
+            # Simple grid: 2 columns, N rows depending on height
+            cols = 2
+            rows = max(2, int(building['height'] / 2.5))
+            
+            for i in range(rows):
+                for j in range(cols):
+                    glPushMatrix()
+                    
+                    # Position on face
+                    # Spread columns across face_width
+                    # (j - 0.5) centers 2 columns. For more cols physics is different.
+                    x_pos = (j - 0.5) * (face_width * 0.5) 
+                    
+                    # Spread rows along height
+                    # Start from bottomish? 
+                    y_pos = (i - rows/2 + 0.5) * (building['height'] / rows) * 0.8
+                    
+                    # Translate to face surface
+                    glTranslatef(x_pos, y_pos, face_dist + 0.05)
+                    
+                    # Scale window (Enlarged)
+                    glScalef(win_size, win_size, win_depth)
+                    
+                    # Random "lights on" effect
+                    # Hash includes side to vary pattern per side
+                    import hashlib
+                    win_hash = int(hashlib.md5(f"{building['x']}{building['z']}{side}{i}{j}".encode()).hexdigest(), 16)
+                    
+                    if win_hash % 3 == 0:
+                        glMaterialfv(GL_FRONT, GL_EMISSION, [0.6, 0.6, 0.4, 1.0])
+                        glColor3f(1.0, 1.0, 0.6) # Brighter yellow
+                    else:
+                        glColor3f(0.1, 0.1, 0.2) # Dark window
+                        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+                    
+                    self.draw_cube(1, 1, 1)
+                    
+                    # Reset emission
+                    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+                    glPopMatrix()
+            
+            glPopMatrix()
     
     def draw_sphere(self, radius):
         """Simple sphere drawing"""
@@ -213,22 +269,60 @@ class City:
             glPopMatrix()
     
     def draw_single_street_light(self):
-        # Tiang
-        glColor3f(0.3, 0.3, 0.3)
-        glPushMatrix()
-        glScalef(0.1, 8.0, 0.1)
-        self.draw_cube(1, 1, 1)
-        glPopMatrix()
+        # MANUAL POLE DRAWING WITH GRADIENT (Tiang dengan efek cahaya)
+        # Replaces simple cube scaling to allow vertex coloring
+        
+        w = 0.05 # Half width (matches 0.1 scale)
+        h_top = 4.0
+        h_bot = -4.0
+        
+        # Colors
+        c_dark = [0.2, 0.2, 0.2]      # Bottom (Dark)
+        c_lit = [1.0, 1.0, 0.5]       # Top (Illuminated by lamp)
+        
+        glBegin(GL_QUADS)
+        # Front
+        glNormal3f(0, 0, 1)
+        glColor3fv(c_dark); glVertex3f(-w, h_bot, w); glVertex3f(w, h_bot, w)
+        glColor3fv(c_lit);  glVertex3f(w, h_top, w); glVertex3f(-w, h_top, w)
+        
+        # Back
+        glNormal3f(0, 0, -1)
+        glColor3fv(c_dark); glVertex3f(w, h_bot, -w); glVertex3f(-w, h_bot, -w)
+        glColor3fv(c_lit);  glVertex3f(-w, h_top, -w); glVertex3f(w, h_top, -w)
+        
+        # Right
+        glNormal3f(1, 0, 0)
+        glColor3fv(c_dark); glVertex3f(w, h_bot, -w); glVertex3f(w, h_bot, w)
+        glColor3fv(c_lit);  glVertex3f(w, h_top, w); glVertex3f(w, h_top, -w)
+        
+        # Left
+        glNormal3f(-1, 0, 0)
+        glColor3fv(c_dark); glVertex3f(-w, h_bot, w); glVertex3f(-w, h_bot, -w)
+        glColor3fv(c_lit);  glVertex3f(-w, h_top, -w); glVertex3f(-w, h_top, w)
+        glEnd()
         
         # Kepala lampu
         glPushMatrix()
         glTranslatef(0, 4.0, 0)
         
-        # Efek menyala kuning (Emissive)
+        # 1. Bulb (Intense Center)
         glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 1.0, 0.0, 1.0])
         glColor3f(1.0, 1.0, 0.0)
-        
         self.draw_sphere(0.5)
+        
+        # 2. Glow Halo (Transparent Outer Sphere)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE) # Additive blending creates "glow"
+        glDepthMask(GL_FALSE) # Don't write key to depth buffer
+        
+        glColor4f(1.0, 0.8, 0.0, 0.2) # Yellowish transparent
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.5, 0.4, 0.0, 1.0])
+        self.draw_sphere(1.5) # Larger radius
+        
+        glDepthMask(GL_TRUE)
+        glDisable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Reset default
         
         # Reset emission
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
