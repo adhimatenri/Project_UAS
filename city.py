@@ -106,10 +106,10 @@ class City:
     
     def draw_windows(self, building):
         # Window settings
-        win_size = 0.6  # Enlarged from ~0.2
+        win_size = 0.6  
         win_depth = 0.1
         
-        # Iterate over 2 sides only: 0=Front, 2=Back (Searah dengan jalan/Z-axis)
+        # Iterate over 2 sides only: 0=Front, 2=Back
         for side in [0, 2]:
             glPushMatrix()
             
@@ -122,12 +122,8 @@ class City:
                 face_width = building['width']
                 face_dist = building['depth'] / 2.0
             else:
-                # Should not happen in this loop but kept for logic
                 face_width = building['depth']
                 face_dist = building['width'] / 2.0
-                
-            # Logic for window placement on this face
-            # Calculate how many windows fit horizontally and vertically
             
             # Simple grid: 2 columns, N rows depending on height
             cols = 2
@@ -236,15 +232,17 @@ class City:
         
         # Moon
         glPushMatrix()
-        # Position moon roughly where the light source is
-        glTranslatef(50.0, 50.0, 50.0) 
-        glColor3f(1.0, 1.0, 0.9) # Pale yellow
+        # Position moon centered on road (X=0), higher and further away
+        glTranslatef(0.0, 60.0, 150.0) 
+        glColor3f(1.0, 1.0, 0.8) # Brighter Pale yellow
         
         # Moon glow
-        glEnable(GL_LIGHTING) # Enable lighting for moon to be visible properly or just use emission
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.8, 0.7, 1.0])
+        glEnable(GL_LIGHTING) 
+        # Stronger emission for "moon effect"
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.9, 0.9, 0.7, 1.0])
         
-        self.draw_sphere(5.0)
+        # Slightly larger moon
+        self.draw_sphere(8.0)
         
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
