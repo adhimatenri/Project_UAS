@@ -207,10 +207,11 @@ class City:
         
     def generate_stars(self):
         """Generate random stars"""
-        for _ in range(200):
+        for _ in range(1000):
             # Stars around the sky dome
             theta = random.uniform(0, 2 * np.pi)
-            phi = random.uniform(0, np.pi / 2.5) # Don't go too low to horizon
+            # Lowered logic: allow stars closer to horizon (pi/2)
+            phi = random.uniform(0, np.pi / 2.05) 
             r = 400.0 # Far away
             
             x = r * np.sin(phi) * np.cos(theta)
