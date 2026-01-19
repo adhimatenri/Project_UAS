@@ -11,14 +11,30 @@ class City:
         self.generate_stars()
     
     def generate_buildings(self):
-        for i in range(-50, 51, 20):
-            for j in range(-50, 51, 20):
-                if abs(i) < 10 and abs(j) < 100:
-                    continue
+        # Adjusted to strictly avoid road overlap using coordinate checks
+        for i in range(-60, 61, 15):
+            for j in range(-60, 61, 20):
                 
-                height = random.uniform(5, 30)
                 width = random.uniform(3, 8)
+                height = random.uniform(5, 30)
                 depth = random.uniform(3, 8)
+                
+                # Generate exact position first
+                noise_x = random.uniform(-5, 5)
+                noise_z = random.uniform(-5, 5)
+                
+                cand_x = i + noise_x
+                cand_z = j + noise_z
+                
+                # ROAD SAFE ZONE CHECK
+                # Road width=15, Sidewalk extends to ~10.5. 
+                # Exact sidewalk edge is 10.5.
+                
+                min_x = cand_x - width/2
+                max_x = cand_x + width/2
+                
+                if max_x > -10.5 and min_x < 10.5:
+                    continue
                 
                 color = [
                     random.uniform(0.3, 0.8),
@@ -28,8 +44,8 @@ class City:
                 ]
                 
                 self.buildings.append({
-                    'x': i + random.uniform(-5, 5),
-                    'z': j + random.uniform(-5, 5),
+                    'x': cand_x,
+                    'z': cand_z,
                     'width': width,
                     'height': height,
                     'depth': depth,
@@ -89,31 +105,68 @@ class City:
         glPopMatrix()
     
     def draw_windows(self, building):
-        glColor3f(0.8, 0.9, 1.0)
+        # Window settings
+        win_size = 0.6  
+        win_depth = 0.1
         
-        window_count = 3
-        for i in range(window_count):
-            for j in range(2):
-                glPushMatrix()
-                x_pos = (j - 0.5) * (building['width'] * 0.6)
-                y_pos = (i - 1) * (building['height'] * 0.25)
-                glTranslatef(x_pos, y_pos, building['depth']/2 + 0.1)
-                glScalef(0.2, 0.2, 0.1)
-                
-                # Random "lights on" effect
-                # We use hash or determinism based on coordinates so it doesn't flicker
-                import hashlib
-                win_hash = int(hashlib.md5(f"{building['x']}{building['z']}{i}{j}".encode()).hexdigest(), 16)
-                if win_hash % 3 == 0: # 1 in 3 windows is lit
-                    glMaterialfv(GL_FRONT, GL_EMISSION, [0.5, 0.5, 0.3, 1.0])
-                    glColor3f(1.0, 1.0, 0.5) # Yellowish light
-                else:
-                    glColor3f(0.2, 0.2, 0.3) # Dark window
-                
-                self.draw_cube(1, 1, 1)
-                # Reset emission
-                glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
-                glPopMatrix()
+        # Iterate over 2 sides only: 0=Front, 2=Back
+        for side in [0, 2]:
+            glPushMatrix()
+            
+            # Rotate to the correct side
+            glRotatef(side * 90, 0, 1, 0)
+            
+            # Determine face dimensions based on side
+            # 0 & 2 (Front/Back) use width for horizontal spacing, depth for distance
+            if side % 2 == 0:
+                face_width = building['width']
+                face_dist = building['depth'] / 2.0
+            else:
+                face_width = building['depth']
+                face_dist = building['width'] / 2.0
+            
+            # Simple grid: 2 columns, N rows depending on height
+            cols = 2
+            rows = max(2, int(building['height'] / 2.5))
+            
+            for i in range(rows):
+                for j in range(cols):
+                    glPushMatrix()
+                    
+                    # Position on face
+                    # Spread columns across face_width
+                    # (j - 0.5) centers 2 columns. For more cols physics is different.
+                    x_pos = (j - 0.5) * (face_width * 0.5) 
+                    
+                    # Spread rows along height
+                    # Start from bottomish? 
+                    y_pos = (i - rows/2 + 0.5) * (building['height'] / rows) * 0.8
+                    
+                    # Translate to face surface
+                    glTranslatef(x_pos, y_pos, face_dist + 0.05)
+                    
+                    # Scale window (Enlarged)
+                    glScalef(win_size, win_size, win_depth)
+                    
+                    # Random "lights on" effect
+                    # Hash includes side to vary pattern per side
+                    import hashlib
+                    win_hash = int(hashlib.md5(f"{building['x']}{building['z']}{side}{i}{j}".encode()).hexdigest(), 16)
+                    
+                    if win_hash % 3 == 0:
+                        glMaterialfv(GL_FRONT, GL_EMISSION, [0.6, 0.6, 0.4, 1.0])
+                        glColor3f(1.0, 1.0, 0.6) # Brighter yellow
+                    else:
+                        glColor3f(0.1, 0.1, 0.2) # Dark window
+                        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+                    
+                    self.draw_cube(1, 1, 1)
+                    
+                    # Reset emission
+                    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+                    glPopMatrix()
+            
+            glPopMatrix()
     
     def draw_sphere(self, radius):
         """Simple sphere drawing"""
@@ -154,10 +207,11 @@ class City:
         
     def generate_stars(self):
         """Generate random stars"""
-        for _ in range(200):
+        for _ in range(1000):
             # Stars around the sky dome
             theta = random.uniform(0, 2 * np.pi)
-            phi = random.uniform(0, np.pi / 2.5) # Don't go too low to horizon
+            # Lowered logic: allow stars closer to horizon (pi/2)
+            phi = random.uniform(0, np.pi / 2.05) 
             r = 400.0 # Far away
             
             x = r * np.sin(phi) * np.cos(theta)
@@ -179,15 +233,17 @@ class City:
         
         # Moon
         glPushMatrix()
-        # Position moon roughly where the light source is
-        glTranslatef(50.0, 50.0, 50.0) 
-        glColor3f(1.0, 1.0, 0.9) # Pale yellow
+        # Position moon centered on road (X=0), higher and further away
+        glTranslatef(0.0, 60.0, 150.0) 
+        glColor3f(1.0, 1.0, 0.8) # Brighter Pale yellow
         
         # Moon glow
-        glEnable(GL_LIGHTING) # Enable lighting for moon to be visible properly or just use emission
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.8, 0.8, 0.7, 1.0])
+        glEnable(GL_LIGHTING) 
+        # Stronger emission for "moon effect"
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.9, 0.9, 0.7, 1.0])
         
-        self.draw_sphere(5.0)
+        # Slightly larger moon
+        self.draw_sphere(8.0)
         
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
@@ -213,6 +269,7 @@ class City:
     
     def draw_single_street_light(self):
         # Tiang
+        glColor3f(0.3, 0.3, 0.3)
         glPushMatrix()
         glScalef(0.1, 8.0, 0.1)
         self.draw_cube(1, 1, 1)
@@ -220,7 +277,14 @@ class City:
         
         # Kepala lampu
         glPushMatrix()
-        glTranslatef(0, 8, 0)
-        glColor3f(1.0, 1.0, 0.8)
+        glTranslatef(0, 4.0, 0)
+        
+        # Efek menyala kuning (Emissive)
+        glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 1.0, 0.0, 1.0])
+        glColor3f(1.0, 1.0, 0.0)
+        
         self.draw_sphere(0.5)
+        
+        # Reset emission
+        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         glPopMatrix()
