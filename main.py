@@ -56,7 +56,12 @@ class CitySimulation:
         print("R - Reset Posisi (Smart spawn)")
         print("")
         print("📷 CAMERA CONTROLS:")
-        print("1/2/3/4 - Mode Kamera (Follow/Top/Free/Side)")
+        print("1 - Follow (Behind car)")
+        print("2 - Orbital (Mouse-controlled rotation)")
+        print("3 - Top (Bird's eye view)")
+        print("4 - Free (Arrow keys control)")
+        print("5 - Side (Lateral view)")
+        print("Mouse: Drag to rotate, Wheel to zoom (Orbital mode)")
         print("Panah Atas/Bawah - Naik/Turun Kamera (Free mode)")
         print("Panah Kiri/Kanan - Putar Kamera (Free mode)")
         print("PageUp/PageDown - Zoom In/Out (Free mode)")
@@ -120,11 +125,30 @@ class CitySimulation:
         glDeleteTextures([tex_id])
 
     def handle_events(self):
-        """Handle keyboard events dengan PyGame"""
+        """Handle keyboard and mouse events dengan PyGame"""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
                 return
+            
+            # Mouse events for orbital camera
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Left mouse button
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    self.camera.start_mouse_drag(mouse_x, mouse_y)
+            
+            elif event.type == pygame.MOUSEMOTION:
+                if self.camera.mode == 'orbital':
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    self.camera.update_mouse_drag(mouse_x, mouse_y)
+            
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:  # Left mouse button
+                    self.camera.end_mouse_drag()
+            
+            elif event.type == pygame.MOUSEWHEEL:
+                if self.camera.mode == 'orbital':
+                    self.camera.mouse_wheel_zoom(event.y)
             
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -147,14 +171,16 @@ class CitySimulation:
                 elif event.key == pygame.K_r:
                     self.car.reset_position()
                 
-                # Kontrol kamera
+                # Kontrol kamera (updated order)
                 elif event.key == pygame.K_1:
                     self.camera.set_mode('follow')
                 elif event.key == pygame.K_2:
-                    self.camera.set_mode('top')
+                    self.camera.set_mode('orbital')
                 elif event.key == pygame.K_3:
-                    self.camera.set_mode('free')
+                    self.camera.set_mode('top')
                 elif event.key == pygame.K_4:
+                    self.camera.set_mode('free')
+                elif event.key == pygame.K_5:
                     self.camera.set_mode('side')
                 
                 # Kontrol zoom (free mode only)
@@ -261,14 +287,22 @@ class CitySimulation:
             f"Kamera: {self.camera.mode.upper()}",
             f"Arah: {self.car.direction:.1f}°",
             f"Grid Road System - {len(self.city.buildings)} Buildings",
-            "WASD: Mengemudi | 1/2/3/4: Kamera | R: Reset | ESC: Keluar"
+            "WASD: Mengemudi | 1/2/3/4/5: Kamera | R: Reset | ESC: Keluar"
         ]
         
         # Add navigation help
         if not self.car.is_on_road(self.car.x, self.car.z):
             info_lines.append("⚠️ OFF ROAD - Return to road!")
-            
-        if self.camera.mode == 'free':
+        
+        # Show mode-specific camera info
+        if self.camera.mode == 'orbital':
+            info_lines.append(
+                f"Orbital Cam: Angle={self.camera.orbital_angle:.1f}°, "
+                f"Pitch={self.camera.orbital_pitch:.1f}°, "
+                f"Distance={self.camera.orbital_distance:.1f}"
+            )
+            info_lines.append("Mouse: Drag to rotate | Wheel to zoom")
+        elif self.camera.mode == 'free':
             info_lines.append(f"Free Cam: Sudut={self.camera.free_camera_angle:.1f}°, Tinggi={self.camera.free_camera_height:.1f}")
             
         for i, line in enumerate(info_lines):

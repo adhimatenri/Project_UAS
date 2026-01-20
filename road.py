@@ -323,37 +323,3 @@ class Road:
             glDeleteLists(self.road_display_list, 1)
         if hasattr(self, 'marking_display_list') and self.marking_display_list:
             glDeleteLists(self.marking_display_list, 1)
-        
-        # Trotoar
-        self.draw_sidewalk()
-    
-    def draw_road_markings(self):
-        glColor3f(1.0, 1.0, 0.0)  # Kuning
-        
-        mark_length = 3.0
-        mark_gap = 5.0
-        mark_width = 0.3
-        
-        for z in range(-self.road_length//2, self.road_length//2, int(mark_length + mark_gap)):
-            glPushMatrix()
-            glTranslatef(0, 0.02, z)
-            glScalef(mark_width, 0.05, mark_length)
-            self.draw_cube(1.0)
-            glPopMatrix()
-    
-    def draw_sidewalk(self):
-        glColor3f(0.6, 0.6, 0.6)  # Warna trotoar
-        
-        # Trotoar kiri
-        glPushMatrix()
-        glTranslatef(-self.road_width/2 - 1.5, 0.05, 0)
-        glScalef(3.0, 0.15, self.road_length)
-        self.draw_cube(1.0)
-        glPopMatrix()
-        
-        # Trotoar kanan
-        glPushMatrix()
-        glTranslatef(self.road_width/2 + 1.5, 0.05, 0)
-        glScalef(3.0, 0.15, self.road_length)
-        self.draw_cube(1.0)
-        glPopMatrix()
