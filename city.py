@@ -1,14 +1,20 @@
-# city.py - Enhanced Building System for Grid-Based City
 import numpy as np
 from OpenGL.GL import *
+from OpenGL.GLU import *
 import random
+import pygame
+import os
 
 class City:
     def __init__(self):
         self.buildings = []
         self.stars = []
         self.road_system = None  # Will be set by main.py
+        self.road_system = None  # Will be set by main.py
         self.city_display_list = None  # GPU-compiled geometry for performance
+        
+        # Load textures (Deferred to setup_gl_resources)
+        self.texture_id = None
         
         # Building theme definitions optimized for dense coverage
         self.building_themes = {
@@ -30,7 +36,38 @@ class City:
         }
         
         self.generate_stars()
+        self.generate_stars()
         print("🏙️  City system initialized - awaiting road system for building placement")
+        
+    def setup_gl_resources(self):
+        """Initialize OpenGL resources after context creation"""
+        self.texture_id = self.load_texture("assets/building_texture.png")
+        print("   ✅ City GL resources loaded")
+
+    def load_texture(self, filename):
+        """Load texture from file"""
+        try:
+            if not os.path.exists(filename):
+                print(f"⚠️ Texture not found: {filename}")
+                return None
+                
+            texture_surface = pygame.image.load(filename)
+            texture_data = pygame.image.tostring(texture_surface, "RGB", 1)
+            width = texture_surface.get_width()
+            height = texture_surface.get_height()
+            
+            tex_id = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, tex_id)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            
+            gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, width, height, GL_RGB, GL_UNSIGNED_BYTE, texture_data)
+            return tex_id
+        except Exception as e:
+            print(f"Error loading texture {filename}: {e}")
+            return None
     
     def set_road_system(self, road_system):
         """Set reference to road system and generate buildings"""
@@ -362,55 +399,84 @@ class City:
         else:
             return 'residential' # Bottom-right: More residential
 
-    def draw_cube(self, width, height, depth):
-        """Draw cube manually"""
+        glEnd()
+
+    def draw_textured_cube(self, width, height, depth):
+        """Draw cube with texture coordinates"""
         w = width / 2
         h = height / 2
         d = depth / 2
+        
+        # Calculate repetitions based on size (approx 5 units per repeat)
+        rep_x = width / 5.0
+        rep_y = height / 5.0
+        rep_z = depth / 5.0
+        
+        glEnable(GL_TEXTURE_2D)
+        if self.texture_id:
+            glBindTexture(GL_TEXTURE_2D, self.texture_id)
+            
+        # Modulate texture with color
+        glColor4f(1.0, 1.0, 1.0, 1.0) 
         
         glBegin(GL_QUADS)
         
         # Front
         glNormal3f(0, 0, 1)
-        glVertex3f(-w, -h, d); glVertex3f(w, -h, d)
-        glVertex3f(w, h, d); glVertex3f(-w, h, d)
+        glTexCoord2f(0, 0); glVertex3f(-w, -h, d)
+        glTexCoord2f(rep_x, 0); glVertex3f(w, -h, d)
+        glTexCoord2f(rep_x, rep_y); glVertex3f(w, h, d)
+        glTexCoord2f(0, rep_y); glVertex3f(-w, h, d)
         
         # Back
         glNormal3f(0, 0, -1)
-        glVertex3f(-w, -h, -d); glVertex3f(-w, h, -d)
-        glVertex3f(w, h, -d); glVertex3f(w, -h, -d)
+        glTexCoord2f(0, 0); glVertex3f(w, -h, -d)
+        glTexCoord2f(rep_x, 0); glVertex3f(-w, -h, -d)
+        glTexCoord2f(rep_x, rep_y); glVertex3f(-w, h, -d)
+        glTexCoord2f(0, rep_y); glVertex3f(w, h, -d)
         
+        # Right
+        glNormal3f(1, 0, 0)
+        glTexCoord2f(0, 0); glVertex3f(w, -h, d)
+        glTexCoord2f(rep_z, 0); glVertex3f(w, -h, -d)
+        glTexCoord2f(rep_z, rep_y); glVertex3f(w, h, -d)
+        glTexCoord2f(0, rep_y); glVertex3f(w, h, d)
+        
+        # Left
+        glNormal3f(-1, 0, 0)
+        glTexCoord2f(0, 0); glVertex3f(-w, -h, -d)
+        glTexCoord2f(rep_z, 0); glVertex3f(-w, -h, d)
+        glTexCoord2f(rep_z, rep_y); glVertex3f(-w, h, d)
+        glTexCoord2f(0, rep_y); glVertex3f(-w, h, -d)
+        
+        glEnd()
+        
+        # Draw Top/Bottom without texture (just dark gray)
+        glDisable(GL_TEXTURE_2D)
+        glColor3f(0.2, 0.2, 0.2)
+        glBegin(GL_QUADS)
         # Top
         glNormal3f(0, 1, 0)
         glVertex3f(-w, h, -d); glVertex3f(-w, h, d)
         glVertex3f(w, h, d); glVertex3f(w, h, -d)
-        
         # Bottom
         glNormal3f(0, -1, 0)
         glVertex3f(-w, -h, -d); glVertex3f(w, -h, -d)
         glVertex3f(w, -h, d); glVertex3f(-w, -h, d)
-        
-        # Right
-        glNormal3f(1, 0, 0)
-        glVertex3f(w, -h, -d); glVertex3f(w, h, -d)
-        glVertex3f(w, h, d); glVertex3f(w, -h, d)
-        
-        # Left
-        glNormal3f(-1, 0, 0)
-        glVertex3f(-w, -h, -d); glVertex3f(-w, -h, d)
-        glVertex3f(-w, h, d); glVertex3f(-w, h, -d)
-        
         glEnd()
     
     def draw_building(self, building):
         glPushMatrix()
         glTranslatef(building['x'], building['height']/2, building['z'])
+        
+        # Use tint color for texture
         glColor4fv(building['color'])
         
-        self.draw_cube(building['width'], building['height'], building['depth'])
+        # Use textured cube for building body
+        self.draw_textured_cube(building['width'], building['height'], building['depth'])
         
-        # Jendela-jendela (sederhana)
-        self.draw_windows(building)
+        # Jendela-jendela (sederhana) - Optional now that we have textures, but keeping for extra detail
+        # self.draw_windows(building) # Disabling windows to let texture shine and save perf
         
         glPopMatrix()
     
@@ -739,4 +805,61 @@ class City:
         
         # Reset emission
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+        
+        # Render Glow Aura (halo)
+        glEnable(GL_BLEND)
+        glDepthMask(GL_FALSE) # Don't write to depth buffer for transparent glow
+        
+        glColor4f(1.0, 1.0, 0.5, 0.3) # Semi-transparent yellow
+        
+        # First halo
+        self.draw_sphere(1.5)
+        
+        # Large faint halo
+        glColor4f(1.0, 1.0, 0.5, 0.1)
+        self.draw_sphere(3.0)
+        
+        glDepthMask(GL_TRUE)
+        glDisable(GL_BLEND)
+        
         glPopMatrix()
+        
+    def draw_cube(self, width, height, depth):
+        """Draw cube manually (restored for street lights)"""
+        w = width / 2
+        h = height / 2
+        d = depth / 2
+        
+        glBegin(GL_QUADS)
+        
+        # Front
+        glNormal3f(0, 0, 1)
+        glVertex3f(-w, -h, d); glVertex3f(w, -h, d)
+        glVertex3f(w, h, d); glVertex3f(-w, h, d)
+        
+        # Back
+        glNormal3f(0, 0, -1)
+        glVertex3f(-w, -h, -d); glVertex3f(-w, h, -d)
+        glVertex3f(w, h, -d); glVertex3f(w, -h, -d)
+        
+        # Top
+        glNormal3f(0, 1, 0)
+        glVertex3f(-w, h, -d); glVertex3f(-w, h, d)
+        glVertex3f(w, h, d); glVertex3f(w, h, -d)
+        
+        # Bottom
+        glNormal3f(0, -1, 0)
+        glVertex3f(-w, -h, -d); glVertex3f(w, -h, -d)
+        glVertex3f(w, -h, d); glVertex3f(-w, -h, d)
+        
+        # Right
+        glNormal3f(1, 0, 0)
+        glVertex3f(w, -h, -d); glVertex3f(w, h, -d)
+        glVertex3f(w, h, d); glVertex3f(w, -h, d)
+        
+        # Left
+        glNormal3f(-1, 0, 0)
+        glVertex3f(-w, -h, -d); glVertex3f(-w, -h, d)
+        glVertex3f(-w, h, d); glVertex3f(-w, h, -d)
+        
+        glEnd()

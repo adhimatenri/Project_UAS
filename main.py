@@ -81,7 +81,11 @@ class CitySimulation:
         glClearColor(0.05, 0.05, 0.2, 1.0)  # Warna langit malam (biru gelap)
         
         # Enable fog for atmospheric effect
+        # Enable fog for atmospheric effect
         self.weather.enable_fog()
+        
+        # Initialize City GL resources (Texture, etc)
+        self.city.setup_gl_resources()
     
 
     
@@ -218,12 +222,67 @@ class CitySimulation:
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.2, 1.0]) # Ambient gelap
         glLightfv(GL_LIGHT0, GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
     
+    def update_dynamic_lighting(self):
+        """Dynamic lighting manager: Activates street lights closest to car"""
+        # Collect all street light positions (based on road grid known in City/Road)
+        # Replicating logic from City.draw_street_lights for efficiency
+        light_candidates = []
+        
+        # Horizontal roads: z = -30, 0, 30
+        for road_z in [-30, 0, 30]:
+            for x in range(-100, 101, 25): # Loop range matching city.py
+                # Skip intersection areas (approximate)
+                if not any(abs(x - rx) <= 10 for rx in [-30, 0, 30]):
+                    light_candidates.append([x, 4.0, road_z - 8])
+                    light_candidates.append([x, 4.0, road_z + 8])
+                    
+        # Vertical roads: x = -30, 0, 30
+        for road_x in [-30, 0, 30]:
+            for z in range(-80, 81, 25):
+                if not any(abs(z - rz) <= 10 for rz in [-30, 0, 30]):
+                    light_candidates.append([road_x - 8, 4.0, z])
+                    light_candidates.append([road_x + 8, 4.0, z])
+        
+        # Sort by distance to car
+        car_pos = np.array([self.car.x, self.car.y, self.car.z])
+        
+        # Calculate squared distances for speed
+        def dist_sq(pos):
+            return (pos[0]-car_pos[0])**2 + (pos[2]-car_pos[2])**2
+            
+        light_candidates.sort(key=dist_sq)
+        
+        # Use up to 6 closest lights (GL_LIGHT1 to GL_LIGHT6)
+        max_lights = 6
+        active_lights = light_candidates[:max_lights]
+        
+        for i in range(max_lights):
+            light_id = GL_LIGHT1 + i
+            if i < len(active_lights):
+                pos = active_lights[i]
+                glEnable(light_id)
+                
+                # Position (w=1 for point light)
+                glLightfv(light_id, GL_POSITION, [pos[0], pos[1], pos[2], 1.0])
+                
+                # Yellowish street light color
+                glLightfv(light_id, GL_DIFFUSE, [1.0, 0.8, 0.4, 1.0])
+                glLightfv(light_id, GL_SPECULAR, [1.0, 0.8, 0.4, 1.0])
+                
+                # Attenuation (falloff) - distinct pools of light
+                glLightf(light_id, GL_CONSTANT_ATTENUATION, 0.1)
+                glLightf(light_id, GL_LINEAR_ATTENUATION, 0.1)
+                glLightf(light_id, GL_QUADRATIC_ATTENUATION, 0.02)
+            else:
+                glDisable(light_id)
+    
     def render(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         
         self.setup_projection()
         self.setup_lighting()
+        self.update_dynamic_lighting()
         
         # Update kamera
         self.camera.update(self.car)
