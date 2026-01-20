@@ -8,10 +8,10 @@ class WeatherSystem:
         # Fog settings
         self.fog_enabled = False
         self.fog_color = (0.1, 0.1, 0.15, 1.0)  # Bluish-gray matching night sky
-        self.fog_density = 0.014  # Enhanced haze (40% increase)
+        self.fog_density = 0.0  # Fog disabled per user request
         
         # Snowfall particle system
-        self.num_particles = 210  # Enhanced snowfall (40% increase)
+        self.num_particles = 3570  # Heavy blizzard (reduced from 10710)
         self.particles = []
         self.particle_spawn_radius = 40.0
         self.particle_spawn_height = 30.0
@@ -38,6 +38,9 @@ class WeatherSystem:
     
     def enable_fog(self):
         """Enable OpenGL hardware fog"""
+        if self.fog_density == 0.0:
+            print("   ✗ Fog disabled (density=0)")
+            return
         glEnable(GL_FOG)
         glFogi(GL_FOG_MODE, GL_EXP2)  # Exponential squared for smooth falloff
         glFogfv(GL_FOG_COLOR, self.fog_color)
