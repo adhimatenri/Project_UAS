@@ -20,8 +20,8 @@ class Car:
         self.wheel_angle = 0.0  # Front wheel angle
         self.auto_mode = False  # Manual mode
         
-        # City boundaries (will be set by main.py)
-        self.world_bounds = 95.0  # Stay within ±95 units
+        # City boundaries (optimized for 3x3 grid)
+        self.world_bounds = 75.0  # Reduced from 95 to 75 units
         self.road_system = None  # Reference to road system
         
         # Warna
@@ -77,7 +77,7 @@ class Car:
         self.direction = 0.0
         self.steering_angle = 0.0
         self.wheel_angle = 0.0
-        print(f"🚗 Car reset to position: ({self.x:.1f}, {self.z:.1f})")
+        print(f"🚗 Car reset to position: ({self.x:.1f}, {self.z:.1f}) in 3x3 grid")
     
     def set_road_system(self, road_system):
         """Set reference to road system for boundaries and spawn position"""
@@ -129,7 +129,7 @@ class Car:
         return False
         
     def update(self, buildings=None):
-        # ENHANCED PHYSICS FOR GRID NAVIGATION
+        # OPTIMIZED PHYSICS FOR 3x3 GRID NAVIGATION
         if abs(self.speed) > 0.01:
             # Calculate movement
             dir_rad = np.radians(self.direction)
@@ -141,48 +141,46 @@ class Car:
             new_x = self.x + dx
             new_z = self.z + dz
             
-            # Check city boundaries first
+            # Check city boundaries first (tighter bounds for 3x3 grid)
             if not self.check_city_boundaries(new_x, new_z):
-                # Hit city boundary - stop and bounce back slightly
-                self.speed = -self.speed * 0.2
-                print("⚠️  Hit city boundary!")
+                # Hit city boundary - stop and bounce back
+                self.speed = -self.speed * 0.15  # Gentler bounce
                 return
             
-            # Check building collision
+            # Optimized building collision (fewer buildings to check)
             collision = False
             if buildings:
                 if self.check_collision(new_x, new_z, buildings):
                     collision = True
-                    self.speed = -self.speed * 0.3
-                    print("🏢 Building collision!")
+                    self.speed = -self.speed * 0.25  # Smoother collision response
             
             if not collision:
                 self.x = new_x
                 self.z = new_z
             
-            # ENHANCED TURNING PHYSICS
+            # OPTIMIZED TURNING PHYSICS
             if abs(self.steering_angle) > 0.5:
-                # Better turn rate calculation for intersections
-                base_turn_speed = 1.2
-                speed_factor = min(abs(self.speed) / 25.0, 1.0)  # Normalize speed effect
-                turn_speed = base_turn_speed * (0.3 + 0.7 * speed_factor)  # Minimum 30% turn rate
+                # Tuned for 3x3 grid intersections
+                base_turn_speed = 1.0  # Slightly reduced for better control
+                speed_factor = min(abs(self.speed) / 20.0, 1.0)
+                turn_speed = base_turn_speed * (0.4 + 0.6 * speed_factor)
                 
                 if self.speed > 0:  # Forward
                     self.direction += self.steering_angle * turn_speed
-                else:  # Reverse - opposite turning
+                else:  # Reverse
                     self.direction -= self.steering_angle * turn_speed
                 
                 self.direction %= 360
         
-        # Steering return to center (slightly faster)
-        self.steering_angle *= 0.80
-        if abs(self.steering_angle) < 1.0:
+        # Faster steering return for better responsiveness
+        self.steering_angle *= 0.85
+        if abs(self.steering_angle) < 0.8:
             self.steering_angle = 0.0
             self.wheel_angle = 0.0
         
         # Natural deceleration
         if abs(self.speed) > 0.05:
-            self.speed *= 0.985
+            self.speed *= 0.988
     
     def update_wheel_rotation(self, delta_time):
         """Animasi putaran roda"""

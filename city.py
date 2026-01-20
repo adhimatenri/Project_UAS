@@ -9,22 +9,22 @@ class City:
         self.stars = []
         self.road_system = None  # Will be set by main.py
         
-        # Building theme definitions
+        # Building theme definitions optimized for dense coverage
         self.building_themes = {
             'residential': {
                 'colors': [(0.8, 0.7, 0.6, 1.0), (0.7, 0.8, 0.7, 1.0), (0.9, 0.8, 0.7, 1.0)],
-                'height_range': (8, 18),
-                'size_range': (4, 7)
+                'height_range': (8, 16),
+                'size_range': (4, 6)
             },
             'commercial': {
                 'colors': [(0.6, 0.6, 0.8, 1.0), (0.5, 0.7, 0.9, 1.0), (0.7, 0.7, 0.8, 1.0)],
-                'height_range': (12, 25),
-                'size_range': (5, 9)
+                'height_range': (12, 22),
+                'size_range': (5, 7)
             },
             'office': {
                 'colors': [(0.4, 0.4, 0.5, 1.0), (0.5, 0.5, 0.6, 1.0), (0.3, 0.4, 0.6, 1.0)],
-                'height_range': (15, 35),
-                'size_range': (6, 12)
+                'height_range': (15, 28),
+                'size_range': (6, 8)
             }
         }
         
@@ -38,7 +38,7 @@ class City:
         print(f"🏢  Generated {len(self.buildings)} buildings in {len(self.road_system.city_blocks)} city blocks")
     
     def generate_buildings_in_blocks(self):
-        """Generate buildings only within designated city blocks"""
+        """Generate dense building coverage with perimeter walls and grid-based placement"""
         if not self.road_system:
             print("⚠️  Cannot generate buildings - no road system reference")
             return
@@ -47,113 +47,176 @@ class City:
         successful_count = 0
         attempted_count = 0
         
+        # Step 1: Generate perimeter walls around world boundaries
+        perimeter_buildings = self.generate_perimeter_walls()
+        successful_count += len(perimeter_buildings)
+        attempted_count += len(perimeter_buildings)
+        
+        # Step 2: Fill city blocks with dense grid-based buildings
         for i, block in enumerate(self.road_system.city_blocks):
-            # Determine theme based on block position (create districts)
             theme = self.get_block_theme(block['center_x'], block['center_z'])
-            
-            # Generate 2-4 buildings per block
-            buildings_per_block = random.randint(2, 4)
-            block_buildings = 0
-            
-            for attempt in range(buildings_per_block * 2):  # More attempts per block
-                attempted_count += 1
-                building = self.generate_single_building_in_block(block, theme)
-                
-                if building:
-                    if not self.building_overlaps_road(building):
-                        self.buildings.append(building)
-                        successful_count += 1
-                        block_buildings += 1
-                        if block_buildings >= buildings_per_block:
-                            break  # Got enough buildings for this block
-                    else:
-                        # Debug: print why building was rejected
-                        if i == 0 and attempt < 2:  # Only debug first block, first attempts
-                            print(f"🔍 Debug: Building at ({building['x']:.1f}, {building['z']:.1f}) rejected (road overlap)")
+            block_buildings, block_attempts = self.generate_dense_block_coverage(block, theme)
+            successful_count += len(block_buildings)
+            attempted_count += block_attempts
         
         print(f"   Building distribution: {attempted_count} attempted, {successful_count} successful")
-        if successful_count == 0:
-            print("⚠️  No buildings generated - checking road overlap algorithm...")
+        print(f"   🏢 Dense coverage: {len(self.buildings)} buildings with perimeter walls")
     
-    def get_block_theme(self, center_x, center_z):
-        """Determine building theme based on city block location"""
-        # Create themed districts
-        if abs(center_x) <= 15 and abs(center_z) <= 15:
-            return 'office'  # Downtown core
-        elif abs(center_x) <= 30 or abs(center_z) <= 30:  
-            return 'commercial'  # Commercial ring
-        else:
-            return 'residential'  # Outer residential areas
+    def generate_dense_block_coverage(self, block, theme):
+        """Fill city block with dense grid-based building placement"""
+        block_buildings = []
+        building_size = 6  # Optimized size for dense coverage
+        spacing = 0.25  # Minimal gap for seamless appearance
+        grid_step = building_size + spacing
+        
+        # Calculate grid boundaries within block
+        block_radius = block['size'] / 2.0
+        margin = 1.0  # Minimal margin for seamless coverage
+        start_x = block['center_x'] - block_radius + margin
+        end_x = block['center_x'] + block_radius - margin
+        start_z = block['center_z'] - block_radius + margin
+        end_z = block['center_z'] + block_radius - margin
+        
+        attempts = 0
+        
+        # Grid-based placement for systematic coverage
+        x = start_x
+        while x < end_x:
+            z = start_z
+            while z < end_z:
+                attempts += 1
+                
+                # Create building at grid position
+                building = self.create_grid_building(x, z, building_size, theme)
+                
+                # Only check road overlap with tight buffer
+                if not self.building_overlaps_road_tight(building):
+                    self.buildings.append(building)
+                    block_buildings.append(building)
+                
+                z += grid_step
+            x += grid_step
+        
+        return block_buildings, attempts
     
-    def generate_single_building_in_block(self, block, theme):
-        """Generate a single building within a city block"""
+    def create_grid_building(self, x, z, base_size, theme):
+        """Create standardized building for grid placement"""
         theme_data = self.building_themes[theme]
         
-        # Building dimensions based on theme  
-        width = random.uniform(*theme_data['size_range'])
-        depth = random.uniform(*theme_data['size_range'])
+        # Standardized sizes for efficient packing
+        size_variation = random.uniform(0.8, 1.2)
+        width = base_size * size_variation
+        depth = base_size * size_variation
         height = random.uniform(*theme_data['height_range'])
-        
-        # Position within block (leave 3-unit margin from block edges)
-        margin = 4.0  # Increased margin to ensure clearance
-        max_offset = (block['size'] / 2.0) - margin - (max(width, depth) / 2.0)
-        
-        if max_offset <= 0:
-            return None  # Building too large for block
-        
-        offset_x = random.uniform(-max_offset, max_offset)
-        offset_z = random.uniform(-max_offset, max_offset)
-        
-        building_x = block['center_x'] + offset_x
-        building_z = block['center_z'] + offset_z
-        
-        # Select color from theme
         color = random.choice(theme_data['colors'])
         
-        # Debug first few buildings
-        if len(self.buildings) < 3:
-            print(f"🏗️ Building attempt: Block center=({block['center_x']}, {block['center_z']}), Building=({building_x:.1f}, {building_z:.1f})")
-        
         return {
-            'x': building_x,
-            'z': building_z,
+            'x': x,
+            'z': z,
             'width': width,
-            'height': height,
+            'height': height, 
             'depth': depth,
             'color': color,
             'theme': theme
         }
     
-    def building_overlaps_road(self, building):
-        """Enhanced check to ensure building doesn't overlap with roads"""
+    def building_overlaps_road_tight(self, building):
+        """Optimized road collision detection with minimal buffer"""
         if not self.road_system:
             return False
             
-        # Reduced safety buffer for testing
+        # Tight buffer for seamless placement
         buffer = 0.5
         
-        # Check building center first (simplest test)
-        center_x, center_z = building['x'], building['z']
-        if self.road_system.is_road_area(center_x, center_z, buffer=1.0):
+        # Check building center
+        if self.road_system.is_road_area(building['x'], building['z'], buffer=buffer):
             return True
         
-        # Check building corners with smaller buffer
+        # Quick corner check with minimal buffer
         half_w = building['width'] / 2.0
         half_d = building['depth'] / 2.0
-        
-        test_points = [
-            (center_x - half_w, center_z - half_d),  # Corner 1
-            (center_x + half_w, center_z - half_d),  # Corner 2
-            (center_x - half_w, center_z + half_d),  # Corner 3
-            (center_x + half_w, center_z + half_d),  # Corner 4
+        corners = [
+            (building['x'] - half_w, building['z'] - half_d),
+            (building['x'] + half_w, building['z'] + half_d)
         ]
         
-        for x, z in test_points:
+        for x, z in corners:
             if self.road_system.is_road_area(x, z, buffer=buffer):
                 return True
                 
         return False
     
+    def generate_perimeter_walls(self):
+        """Generate continuous building walls around world boundaries"""
+        perimeter_buildings = []
+        world_edge = 75  # Slightly inside world bounds of ±80
+        building_size = 8  # Standard size for perimeter buildings
+        building_height = 12  # Consistent height for wall appearance
+        
+        # Perimeter wall color (neutral gray)
+        wall_color = (0.5, 0.5, 0.5, 1.0)
+        
+        positions = []
+        
+        # North wall (top edge)
+        for x in range(-world_edge, world_edge + 1, building_size):
+            positions.append((x, world_edge, 'north'))
+        
+        # South wall (bottom edge) 
+        for x in range(-world_edge, world_edge + 1, building_size):
+            positions.append((x, -world_edge, 'south'))
+        
+        # East wall (right edge)
+        for z in range(-world_edge + building_size, world_edge, building_size):
+            positions.append((world_edge, z, 'east'))
+        
+        # West wall (left edge)
+        for z in range(-world_edge + building_size, world_edge, building_size):
+            positions.append((-world_edge, z, 'west'))
+        
+        for x, z, wall_type in positions:
+            # Skip if position overlaps with roads
+            if not self.road_system.is_road_area(x, z, buffer=0.5):
+                building = {
+                    'x': x,
+                    'z': z, 
+                    'width': building_size,
+                    'height': building_height,
+                    'depth': building_size,
+                    'color': wall_color,
+                    'theme': 'perimeter'
+                }
+                self.buildings.append(building)
+                perimeter_buildings.append(building)
+        
+        return perimeter_buildings
+        """Determine building theme for 4-block system with distinct districts"""
+        # Create themed districts for the 4 blocks
+        if center_x < 0 and center_z < 0:
+            return 'office'      # Top-left: Downtown office district
+        elif center_x > 0 and center_z < 0:
+            return 'commercial'  # Top-right: Commercial district 
+        elif center_x < 0 and center_z > 0:
+            return 'residential' # Bottom-left: Residential district
+        else:
+            return 'residential' # Bottom-right: More residential
+    
+
+    
+
+    
+    def get_block_theme(self, center_x, center_z):
+        """Determine building theme for 4-block system with distinct districts"""
+        # Create themed districts for the 4 blocks
+        if center_x < 0 and center_z < 0:
+            return 'office'      # Top-left: Downtown office district
+        elif center_x > 0 and center_z < 0:
+            return 'commercial'  # Top-right: Commercial district 
+        elif center_x < 0 and center_z > 0:
+            return 'residential' # Bottom-left: Residential district
+        else:
+            return 'residential' # Bottom-right: More residential
+
     def draw_cube(self, width, height, depth):
         """Draw cube manually"""
         w = width / 2

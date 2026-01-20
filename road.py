@@ -6,34 +6,35 @@ import numpy as np
 
 class Road:
     def __init__(self):
-        # Grid-based road system (4x4 city blocks)
+        # Optimized 3x3 grid system for better performance
         self.road_width = 15
-        self.world_size = 200  # Total world is 200x200 units
+        self.world_size = 160  # Reduced from 200 for tighter city
         
-        # Road network coordinates
-        self.horizontal_roads = [-45, -15, 15, 45, 75]  # Z-coordinates
-        self.vertical_roads = [-45, -15, 15, 45, 75]    # X-coordinates
+        # Simplified road network coordinates (3x3 grid)
+        self.horizontal_roads = [-30, 0, 30]  # Z-coordinates (3 roads)
+        self.vertical_roads = [-30, 0, 30]    # X-coordinates (3 roads)
         
-        # City block definitions (30x30 units each)
+        # City block definitions (4 larger blocks: 50x50 units each)
         self.city_blocks = []
-        for i in range(4):
-            for j in range(4):
-                center_x = -30 + (i * 30)
-                center_z = -30 + (j * 30)
-                self.city_blocks.append({
-                    'center_x': center_x,
-                    'center_z': center_z,
-                    'size': 30
-                })
+        block_size = 50
+        block_positions = [(-15, -15), (15, -15), (-15, 15), (15, 15)]  # Plus pattern centers
+        
+        for center_x, center_z in block_positions:
+            self.city_blocks.append({
+                'center_x': center_x,
+                'center_z': center_z, 
+                'size': block_size
+            })
         
         # Performance optimization
         self.road_display_list = None
         self.marking_display_list = None
         
-        print(f"🛣️  Road system initialized:")
-        print(f"   Grid: 5x5 roads creating 16 city blocks")
+        print(f"🛣️  Optimized road system initialized:")
+        print(f"   Grid: 3x3 roads creating 4 large city blocks")
+        print(f"   Intersections: 9 (reduced from 25)")
         print(f"   World bounds: ±{self.world_size//2} units")
-        print(f"   City blocks: {len(self.city_blocks)} total")
+        print(f"   Performance: 64% fewer intersection calculations")
     
     def get_city_blocks(self):
         """Return city block information for building placement"""
@@ -62,10 +63,10 @@ class Road:
         return near_vertical and near_horizontal
     
     def get_spawn_position(self):
-        """Get a good spawn position in middle of a road segment"""
-        # Spawn in center of middle vertical road, between first and second horizontal roads
-        spawn_x = self.vertical_roads[2]  # Middle vertical road (15)
-        spawn_z = (self.horizontal_roads[0] + self.horizontal_roads[1]) / 2  # Between roads (-30)
+        """Get a good spawn position in middle of a road segment for 3x3 grid"""
+        # Spawn in center road (index 1), between intersections
+        spawn_x = self.vertical_roads[1]  # Center vertical road (0)
+        spawn_z = (self.horizontal_roads[0] + self.horizontal_roads[1]) / 2  # Between first two roads (-15)
         return spawn_x, 0.3, spawn_z
 
     def draw_cube(self, size):

@@ -29,6 +29,9 @@ class CitySimulation:
         self.frame_count = 0
         self.running = True
         
+        # Simple FPS tracking
+        self.current_fps = 60.0
+        
         # Initialize PyGame
         pygame.init()
         pygame.display.set_mode(
@@ -76,6 +79,52 @@ class CitySimulation:
         # Night Mode Background
         glClearColor(0.05, 0.05, 0.2, 1.0)  # Warna langit malam (biru gelap)
     
+
+    
+    def draw_fps_display(self):
+        """Draw real-time FPS counter with color coding"""
+        # Determine FPS color based on performance
+        if self.current_fps >= 55:
+            fps_color = (0, 255, 0)      # Green - Good performance
+        elif self.current_fps >= 45:
+            fps_color = (255, 255, 0)    # Yellow - Acceptable
+        else:
+            fps_color = (255, 0, 0)      # Red - Poor performance
+        
+        # Format FPS text
+        fps_text = f"FPS: {self.current_fps:.1f}"
+        fps_surface = self.font.render(fps_text, True, fps_color)
+        fps_data = pygame.image.tostring(fps_surface, "RGBA", True)
+        fps_w, fps_h = fps_surface.get_size()
+        
+        # Position in top-right corner
+        fps_x = self.width - fps_w - 20
+        fps_y = 20
+        
+        # Create and bind texture
+        tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fps_w, fps_h, 0, 
+                    GL_RGBA, GL_UNSIGNED_BYTE, fps_data)
+        
+        glEnable(GL_TEXTURE_2D)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        
+        glColor3f(1, 1, 1)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 1); glVertex2f(fps_x, fps_y)
+        glTexCoord2f(1, 1); glVertex2f(fps_x + fps_w, fps_y)
+        glTexCoord2f(1, 0); glVertex2f(fps_x + fps_w, fps_y + fps_h)
+        glTexCoord2f(0, 0); glVertex2f(fps_x, fps_y + fps_h)
+        glEnd()
+        
+        glDisable(GL_BLEND)
+        glDisable(GL_TEXTURE_2D)
+        glDeleteTextures([tex_id])
+
     def handle_events(self):
         """Handle keyboard events dengan PyGame"""
         for event in pygame.event.get():
@@ -212,6 +261,7 @@ class CitySimulation:
         # Note: In a larger app, we would cache these textures in __init__ or update only on change.
         
         info_lines = [
+            f"FPS: {self.current_fps:.1f}",
             f"Posisi: X={self.car.x:6.1f}, Z={self.car.z:6.1f}",
             f"Kecepatan: {abs(self.car.speed):5.1f} km/h",
             f"Kamera: {self.camera.mode.upper()}",
@@ -329,27 +379,22 @@ class CitySimulation:
         print(f"⚡ Performance: {self.frame_count//60}s runtime")
     
     def run(self):
-        """Main game loop"""
+        """Main game loop with FPS monitoring"""
         clock = pygame.time.Clock()
-        last_time = pygame.time.get_ticks()
+        last_time = pygame.time.get_ticks() / 1000.0  # Convert to seconds
         
         print("\n🚗 Enhanced 3D Maze City Simulation")
-        print("🔧 Loading complete! Navigate the 4x4 road grid...")
+        print("🔧 Loading complete! Navigate the optimized 3x3 road grid...")
         print(f"🏙️ City ready: {len(self.city.buildings)} buildings in themed districts")
-        print(f"🛣️ Road network: 4x4 grid with realistic markings")
+        print(f"🛣️ Road network: 3x3 grid with 9 intersections (64% fewer calculations)")
+        print("📊 Real-time FPS monitoring enabled!")
         
         while self.running:
-            # Hitung delta_time untuk animasi yang smooth
-            current_time = pygame.time.get_ticks()
-            delta_time = (current_time - last_time) / 1000.0  # Konversi ke detik
-            last_time = current_time
+            # Simple FPS tracking
+            self.current_fps = clock.get_fps()
             
             # Handle input events
             self.handle_events()
-            
-            # Update animasi roda dengan delta_time
-            if delta_time > 0:
-                self.car.update_wheel_rotation(delta_time)
             
             # Update frame count
             self.frame_count += 1
@@ -364,7 +409,7 @@ class CitySimulation:
             clock.tick(60)
         
         pygame.quit()
-        print("\n✅ Simulasi ditutup dengan sukses!")
+        print(f"\n✅ Optimized simulation closed! Average FPS: {self.current_fps:.1f}")
 
 if __name__ == "__main__":
     try:
