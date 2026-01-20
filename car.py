@@ -5,19 +5,24 @@ from OpenGL.GLU import *
 
 class Car:
     def __init__(self):
-        self.x = 0.0
+        # Default spawn position (will be updated by road system)
+        self.x = 15.0  # Middle vertical road
         self.y = 0.3
-        self.z = 0.0
-        self.speed = 0.0  # Mulai dari diam
+        self.z = -30.0  # Between first two horizontal roads
+        self.speed = 0.0  # Start stationary
         self.max_speed = 50.0
-        self.acceleration = 2.0  # Akselerasi lebih kuat
-        self.brake_power = 3.0  # Rem lebih kuat
+        self.acceleration = 2.5  # Enhanced for intersection navigation
+        self.brake_power = 4.0  # Stronger braking
         self.steering_angle = 0.0
-        self.max_steering = 45.0
-        self.direction = 0.0  # Arah mobil (derajat)
+        self.max_steering = 55.0  # Increased for sharper turns
+        self.direction = 0.0  # Car direction (degrees)
         self.wheel_rotation = 0.0
-        self.wheel_angle = 0.0  # Sudut roda depan
+        self.wheel_angle = 0.0  # Front wheel angle
         self.auto_mode = False  # Manual mode
+        
+        # City boundaries (will be set by main.py)
+        self.world_bounds = 95.0  # Stay within ±95 units
+        self.road_system = None  # Reference to road system
         
         # Warna
         self.body_color = [0.2, 0.5, 0.8, 1.0]
@@ -38,11 +43,15 @@ class Car:
         self.speed = max(self.speed - self.acceleration, -self.max_speed/2)
     
     def turn_left(self):
-        self.steering_angle = min(self.steering_angle + 3.0, self.max_steering)
+        # Enhanced steering responsiveness for intersections
+        turn_rate = 4.0 if abs(self.speed) > 10 else 6.0  # Faster turning at low speeds
+        self.steering_angle = min(self.steering_angle + turn_rate, self.max_steering)
         self.wheel_angle = self.steering_angle
     
     def turn_right(self):
-        self.steering_angle = max(self.steering_angle - 3.0, -self.max_steering)
+        # Enhanced steering responsiveness for intersections  
+        turn_rate = 4.0 if abs(self.speed) > 10 else 6.0  # Faster turning at low speeds
+        self.steering_angle = max(self.steering_angle - turn_rate, -self.max_steering)
         self.wheel_angle = self.steering_angle
     
     def brake(self):
@@ -52,12 +61,44 @@ class Car:
             self.speed = min(self.speed + self.brake_power, 0)
     
     def reset_position(self):
-        self.x = 0.0
-        self.z = 0.0
+        # Reset to proper spawn position in road grid
+        if self.road_system:
+            spawn_x, spawn_y, spawn_z = self.road_system.get_spawn_position()
+            self.x = spawn_x
+            self.y = spawn_y 
+            self.z = spawn_z
+        else:
+            # Fallback to grid-compatible position
+            self.x = 15.0  # Middle vertical road
+            self.y = 0.3
+            self.z = -30.0  # Between roads
+        
         self.speed = 0.0
         self.direction = 0.0
         self.steering_angle = 0.0
         self.wheel_angle = 0.0
+        print(f"🚗 Car reset to position: ({self.x:.1f}, {self.z:.1f})")
+    
+    def set_road_system(self, road_system):
+        """Set reference to road system for boundaries and spawn position"""
+        self.road_system = road_system
+        # Update spawn position
+        if road_system:
+            spawn_x, spawn_y, spawn_z = road_system.get_spawn_position()
+            self.x = spawn_x
+            self.y = spawn_y
+            self.z = spawn_z
+            print(f"🚗 Car spawn position set to: ({self.x:.1f}, {self.z:.1f})")
+    
+    def check_city_boundaries(self, new_x, new_z):
+        """Check if position is within city boundaries"""
+        return (abs(new_x) <= self.world_bounds and abs(new_z) <= self.world_bounds)
+    
+    def is_on_road(self, x, z):
+        """Check if position is on a road (for better navigation feedback)"""
+        if not self.road_system:
+            return True  # Assume on road if no road system
+        return self.road_system.is_road_area(x, z, buffer=0.5)
     
     def check_collision(self, new_x, new_z, buildings):
         """Simple collision detection - returns True if collision"""
@@ -73,55 +114,75 @@ class Car:
             if min_x < new_x < max_x and min_z < new_z < max_z:
                 return True
         return False
+        """Simple collision detection - returns True if collision"""
+        car_radius = 1.0  # Ukuran setengah body mobil
+        
+        for b in buildings:
+            # Building bounds
+            min_x = b['x'] - b['width']/2 - car_radius
+            max_x = b['x'] + b['width']/2 + car_radius
+            min_z = b['z'] - b['depth']/2 - car_radius
+            max_z = b['z'] + b['depth']/2 + car_radius
+            
+            if min_x < new_x < max_x and min_z < new_z < max_z:
+                return True
+        return False
         
     def update(self, buildings=None):
-        # FISIKA MOBIL YANG LEBIH BAIK
-        if abs(self.speed) > 0.01:  # Hanya jika bergerak
-            # Update posisi berdasarkan arah dan kecepatan
+        # ENHANCED PHYSICS FOR GRID NAVIGATION
+        if abs(self.speed) > 0.01:
+            # Calculate movement
             dir_rad = np.radians(self.direction)
-            move_factor = 0.08  # Faktor gerakan
+            move_factor = 0.08
             
-            # Hitung calon posisi baru
             dx = self.speed * np.sin(dir_rad) * move_factor
             dz = self.speed * np.cos(dir_rad) * move_factor
             
             new_x = self.x + dx
             new_z = self.z + dz
             
-            # Cek collision jika daftar gedung diberikan
+            # Check city boundaries first
+            if not self.check_city_boundaries(new_x, new_z):
+                # Hit city boundary - stop and bounce back slightly
+                self.speed = -self.speed * 0.2
+                print("⚠️  Hit city boundary!")
+                return
+            
+            # Check building collision
             collision = False
             if buildings:
                 if self.check_collision(new_x, new_z, buildings):
                     collision = True
-                    # Tabrakan! Berhenti dan mental sedikit
                     self.speed = -self.speed * 0.3
+                    print("🏢 Building collision!")
             
             if not collision:
                 self.x = new_x
                 self.z = new_z
             
-            # BELOKAN MOBIL berdasarkan steering
+            # ENHANCED TURNING PHYSICS
             if abs(self.steering_angle) > 0.5:
-                # Mobil belok lebih tajam saat lebih pelan
-                turn_speed = 0.8 * (abs(self.speed) / 20.0)  # Adjust factor
-                turn_speed = max(turn_speed, 0.1)  # Minimum turning
+                # Better turn rate calculation for intersections
+                base_turn_speed = 1.2
+                speed_factor = min(abs(self.speed) / 25.0, 1.0)  # Normalize speed effect
+                turn_speed = base_turn_speed * (0.3 + 0.7 * speed_factor)  # Minimum 30% turn rate
                 
-                if self.speed > 0:  # Maju
+                if self.speed > 0:  # Forward
                     self.direction += self.steering_angle * turn_speed
-                else:  # Mundur - belok terbalik
+                else:  # Reverse - opposite turning
                     self.direction -= self.steering_angle * turn_speed
                 
                 self.direction %= 360
         
-        # Steering slowly returns to center
-        self.steering_angle *= 0.85
-        if abs(self.steering_angle) < 0.5:
+        # Steering return to center (slightly faster)
+        self.steering_angle *= 0.80
+        if abs(self.steering_angle) < 1.0:
             self.steering_angle = 0.0
             self.wheel_angle = 0.0
         
-        # Natural deceleration (drag)
+        # Natural deceleration
         if abs(self.speed) > 0.05:
-            self.speed *= 0.985  # Sedikit drag
+            self.speed *= 0.985
     
     def update_wheel_rotation(self, delta_time):
         """Animasi putaran roda"""

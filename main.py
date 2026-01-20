@@ -13,10 +13,17 @@ class CitySimulation:
     def __init__(self, width=1280, height=720):
         self.width = width
         self.height = height
-        self.car = Car()
-        self.city = City()
-        self.road = Road()
+        
+        # Initialize systems in correct order
+        self.road = Road()  # Road system first
+        self.car = Car()    # Car second
+        self.city = City()  # City last
         self.camera = Camera()
+        
+        # Link systems together for proper integration
+        self.car.set_road_system(self.road)
+        self.city.set_road_system(self.road)
+        
         self.light_position = [50.0, 50.0, 50.0, 1.0]
         self.light_color = [1.0, 1.0, 1.0, 1.0]
         self.frame_count = 0
@@ -28,7 +35,7 @@ class CitySimulation:
             (width, height), 
             pygame.OPENGL | pygame.DOUBLEBUF
         )
-        pygame.display.set_caption("3D City Simulation - Mobil Interaktif")
+        pygame.display.set_caption("3D City Simulation - Enhanced Maze City")
         
         # Initialize font untuk info
         pygame.font.init()
@@ -37,16 +44,26 @@ class CitySimulation:
         self.init_opengl()
         
         print("\n" + "="*80)
-        print("3D CITY SIMULATION - KONTROL")
+        print("3D CITY SIMULATION - ENHANCED MAZE CITY")
         print("="*80)
-        print("W/S - Gas/Rem")
-        print("A/D - Belok Kiri/Kanan")
+        print("🚗 ENHANCED CAR CONTROLS:")
+        print("W/S - Gas/Rem (Improved acceleration)")
+        print("A/D - Belok Kiri/Kanan (Enhanced steering)")
         print("SPACE - Rem Darurat")
+        print("R - Reset Posisi (Smart spawn)")
+        print("")
+        print("📷 CAMERA CONTROLS:")
         print("1/2/3/4 - Mode Kamera (Follow/Top/Free/Side)")
-        print("R - Reset Posisi")
         print("Panah Atas/Bawah - Naik/Turun Kamera (Free mode)")
         print("Panah Kiri/Kanan - Putar Kamera (Free mode)")
         print("PageUp/PageDown - Zoom In/Out (Free mode)")
+        print("")
+        print("🏙️ CITY FEATURES:")
+        print("- 4x4 Grid road network with intersections")
+        print("- Realistic lane markings and crosswalks")
+        print("- Buildings sorted by districts (office/commercial/residential)")
+        print("- City boundaries prevent escape")
+        print("")
         print("ESC - Keluar")
         print("="*80)
         
@@ -150,7 +167,7 @@ class CitySimulation:
         self.city.render()
         
         # Update dan gambar mobil - PASS BUILDINGS FOR COLLISION
-        self.car.update(self.city.buildings)
+        self.car.update(self.city.get_buildings_for_collision())
         self.car.render()
         
         # UI informasi
@@ -199,9 +216,14 @@ class CitySimulation:
             f"Kecepatan: {abs(self.car.speed):5.1f} km/h",
             f"Kamera: {self.camera.mode.upper()}",
             f"Arah: {self.car.direction:.1f}°",
+            f"Grid Road System - {len(self.city.buildings)} Buildings",
             "WASD: Mengemudi | 1/2/3/4: Kamera | R: Reset | ESC: Keluar"
         ]
         
+        # Add navigation help
+        if not self.car.is_on_road(self.car.x, self.car.z):
+            info_lines.append("⚠️ OFF ROAD - Return to road!")
+            
         if self.camera.mode == 'free':
             info_lines.append(f"Free Cam: Sudut={self.camera.free_camera_angle:.1f}°, Tinggi={self.camera.free_camera_height:.1f}")
             
@@ -299,20 +321,22 @@ class CitySimulation:
     
     def print_debug_info(self):
         """Print debug info ke terminal untuk troubleshooting"""
-        print(f"\n=== INFO SIMULASI ===")
-        print(f"Posisi Mobil: X={self.car.x:.1f}, Z={self.car.z:.1f}")
-        print(f"Kecepatan: {self.car.speed:.1f} km/h")
-        print(f"Rotasi Roda: {self.car.wheel_rotation:.1f}°")
-        print(f"Mode Kamera: {self.camera.mode}")
-        print(f"Auto Mode: {'ON' if self.car.auto_mode else 'OFF'}")
+        print(f"\n=== ENHANCED CITY SIMULATION INFO ===")
+        print(f"🚗 Car: Position=({self.car.x:.1f}, {self.car.z:.1f}), Speed={self.car.speed:.1f} km/h")
+        print(f"🛣️  Road: On road = {self.car.is_on_road(self.car.x, self.car.z)}")
+        print(f"🏢 Buildings: {len(self.city.buildings)} total in {len(self.road.city_blocks)} blocks")
+        print(f"📷 Camera: {self.camera.mode} mode")
+        print(f"⚡ Performance: {self.frame_count//60}s runtime")
     
     def run(self):
         """Main game loop"""
         clock = pygame.time.Clock()
         last_time = pygame.time.get_ticks()
         
-        print("\n🚗 Simulasi 3D Kota dengan Mobil Interaktif")
-        print("🔧 Loading selesai! Mobil siap dikendarai...")
+        print("\n🚗 Enhanced 3D Maze City Simulation")
+        print("🔧 Loading complete! Navigate the 4x4 road grid...")
+        print(f"🏙️ City ready: {len(self.city.buildings)} buildings in themed districts")
+        print(f"🛣️ Road network: 4x4 grid with realistic markings")
         
         while self.running:
             # Hitung delta_time untuk animasi yang smooth
