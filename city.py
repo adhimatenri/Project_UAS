@@ -755,91 +755,6 @@ class City:
         
         # Reset emission
         glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
-        glPopMatrix()
-        self.draw_street_lights()
-        
-    def generate_stars(self):
-        """Generate random stars"""
-        for _ in range(1000):
-            # Stars around the sky dome
-            theta = random.uniform(0, 2 * np.pi)
-            # Lowered logic: allow stars closer to horizon (pi/2)
-            phi = random.uniform(0, np.pi / 2.05) 
-            r = 400.0 # Far away
-            
-            x = r * np.sin(phi) * np.cos(theta)
-            y = r * np.cos(phi)
-            z = r * np.sin(phi) * np.sin(theta)
-            
-            self.stars.append((x, y, z))
-
-    def draw_sky(self):
-        """Draw stars and moon"""
-        # Stars
-        glDisable(GL_LIGHTING)
-        glColor3f(1.0, 1.0, 1.0)
-        glPointSize(2.0)
-        glBegin(GL_POINTS)
-        for star in self.stars:
-            glVertex3f(star[0], star[1], star[2])
-        glEnd()
-        
-        # Moon
-        glPushMatrix()
-        # Position moon centered on road (X=0), higher and further away
-        glTranslatef(0.0, 60.0, 150.0) 
-        glColor3f(1.0, 1.0, 0.8) # Brighter Pale yellow
-        
-        # Moon glow
-        glEnable(GL_LIGHTING) 
-        # Stronger emission for "moon effect"
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.9, 0.9, 0.7, 1.0])
-        
-        # Slightly larger moon
-        self.draw_sphere(8.0)
-        
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
-        glPopMatrix()
-        
-        glEnable(GL_LIGHTING)
-
-    def draw_street_lights(self):
-        glColor3f(0.3, 0.3, 0.3)
-        
-        # Extended range to match road length (approx -100 to 100)
-        for z in range(-100, 101, 25): 
-            # Lampu kiri
-            glPushMatrix()
-            glTranslatef(-8, 0, z)
-            self.draw_single_street_light()
-            glPopMatrix()
-            
-            # Lampu kanan
-            glPushMatrix()
-            glTranslatef(8, 0, z)
-            self.draw_single_street_light()
-            glPopMatrix()
-    
-    def draw_single_street_light(self):
-        # Tiang
-        glColor3f(0.3, 0.3, 0.3)
-        glPushMatrix()
-        glScalef(0.1, 8.0, 0.1)
-        self.draw_cube(1, 1, 1)
-        glPopMatrix()
-        
-        # Kepala lampu
-        glPushMatrix()
-        glTranslatef(0, 4.0, 0)
-        
-        # Efek menyala kuning (Emissive)
-        glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 1.0, 0.0, 1.0])
-        glColor3f(1.0, 1.0, 0.0)
-        
-        self.draw_sphere(0.5)
-        
-        # Reset emission
-        glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
         
         # Render Glow Aura (halo)
         glEnable(GL_BLEND)
@@ -860,7 +775,7 @@ class City:
         glPopMatrix()
         
     def draw_cube(self, width, height, depth):
-        """Draw cube manually (restored for street lights)"""
+        """Draw cube manually"""
         w = width / 2
         h = height / 2
         d = depth / 2
