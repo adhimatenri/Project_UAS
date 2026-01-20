@@ -12,6 +12,7 @@ class City:
         self.road_system = None  # Will be set by main.py
         self.road_system = None  # Will be set by main.py
         self.city_display_list = None  # GPU-compiled geometry for performance
+        self.street_lights_display_list = None  # GPU-compiled street lights
         
         # Load textures (Deferred to setup_gl_resources)
         self.texture_id = None
@@ -412,9 +413,8 @@ class City:
         rep_y = height / 5.0
         rep_z = depth / 5.0
         
-        glEnable(GL_TEXTURE_2D)
-        if self.texture_id:
-            glBindTexture(GL_TEXTURE_2D, self.texture_id)
+        # OPTIMIZATION: Assume texture already bound by caller
+        # Removed: glEnable(GL_TEXTURE_2D) and glBindTexture() - now done once outside loop
             
         # Modulate texture with color
         glColor4f(1.0, 1.0, 1.0, 1.0) 
@@ -452,7 +452,7 @@ class City:
         glEnd()
         
         # Draw Top/Bottom without texture (just dark gray)
-        glDisable(GL_TEXTURE_2D)
+        glDisable(GL_TEXTURE_2D)  # Temporarily disable for non-textured surfaces
         glColor3f(0.2, 0.2, 0.2)
         glBegin(GL_QUADS)
         # Top
@@ -464,6 +464,9 @@ class City:
         glVertex3f(-w, -h, -d); glVertex3f(w, -h, -d)
         glVertex3f(w, -h, d); glVertex3f(-w, -h, d)
         glEnd()
+        
+        # Re-enable texture for next building
+        glEnable(GL_TEXTURE_2D)
     
     def draw_building(self, building):
         glPushMatrix()
@@ -579,12 +582,36 @@ class City:
         self.city_display_list = glGenLists(1)
         glNewList(self.city_display_list, GL_COMPILE)
         
-        # Record all building drawing commands
+        # OPTIMIZATION: Set texture state ONCE before recording all buildings
+        # This eliminates ~1000+ redundant state changes per frame
+        glEnable(GL_TEXTURE_2D)
+        if self.texture_id:
+            glBindTexture(GL_TEXTURE_2D, self.texture_id)
+        
+        # Record all building drawing commands (texture already bound)
         for building in self.buildings:
             self.draw_building(building)
         
+        # Clean up texture state
+        glDisable(GL_TEXTURE_2D)
+        
         glEndList()
         print(f"   ⚡ GPU display list compiled: {len(self.buildings)} buildings optimized")
+        print(f"   🎨 Texture state optimized: 1 bind vs {len(self.buildings)} previous redundant binds")
+        
+        # Also compile street lights to GPU for performance
+        self.compile_street_lights()
+    
+    def compile_street_lights(self):
+        """Compile street lights into a GPU display list for performance"""
+        if self.street_lights_display_list is not None:
+            glDeleteLists(self.street_lights_display_list, 1)
+        
+        self.street_lights_display_list = glGenLists(1)
+        glNewList(self.street_lights_display_list, GL_COMPILE)
+        self.draw_street_lights()
+        glEndList()
+        print(f"   💡 Street lights compiled to GPU display list")
     
     def render(self):
         """Render all city elements using GPU-accelerated display list"""
@@ -599,8 +626,11 @@ class City:
             for building in self.buildings:
                 self.draw_building(building)
         
-        # Draw street lights
-        if self.road_system:
+        # Draw street lights using compiled display list
+        if self.street_lights_display_list is not None:
+            glCallList(self.street_lights_display_list)
+        else:
+            # Fallback to immediate mode
             self.draw_street_lights()
     
     def get_buildings_for_collision(self):
@@ -613,6 +643,11 @@ class City:
             glDeleteLists(self.city_display_list, 1)
             self.city_display_list = None
             print("🧹 City display list cleaned up")
+        
+        if self.street_lights_display_list is not None:
+            glDeleteLists(self.street_lights_display_list, 1)
+            self.street_lights_display_list = None
+            print("💡 Street lights display list cleaned up")
 
     def generate_stars(self):
         """Generate random stars"""
