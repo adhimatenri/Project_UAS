@@ -51,6 +51,14 @@ class City:
         perimeter_buildings = self.generate_optimized_perimeter_walls()
         successful_count += len(perimeter_buildings)
         attempted_count += len(perimeter_buildings)
+        stats = getattr(self, 'perimeter_edge_stats', None)
+        if stats:
+            print(
+                "   Perimeter coverage -> "
+                f"N:{stats.get('north',0)} S:{stats.get('south',0)} "
+                f"E:{stats.get('east',0)} W:{stats.get('west',0)} "
+                f"Corners:{stats.get('corner',0)} Seam:{stats.get('seam',0)}"
+            )
         
         # Step 2: Generate perfect-fit buildings for each block segment
         for i, block in enumerate(self.road_system.city_blocks):
@@ -215,57 +223,127 @@ class City:
         return False
     
     def generate_optimized_perimeter_walls(self):
-        """Generate optimized perimeter walls with exact edge coverage"""
+        """Tile the entire outer belt (|coord| ∈ [45, 80]) with road-safe buildings"""
+        if not self.road_system:
+            self.perimeter_edge_stats = {}
+            return []
+        
         perimeter_buildings = []
-        world_edge = 72  # Optimized distance from center
-        building_height = 15  # Consistent wall height
-        wall_color = (0.4, 0.4, 0.4, 1.0)  # Neutral wall color
-        
-        # Calculate exact perimeter segments to avoid road intersections
-        perimeter_segments = [
-            # North wall segments (avoiding road at x=0)
-            {'x': -45, 'z': world_edge, 'width': 30, 'depth': 8},
-            {'x': 45, 'z': world_edge, 'width': 30, 'depth': 8},
-            
-            # South wall segments (avoiding road at x=0)
-            {'x': -45, 'z': -world_edge, 'width': 30, 'depth': 8},
-            {'x': 45, 'z': -world_edge, 'width': 30, 'depth': 8},
-            
-            # East wall segments (avoiding road at z=0)
-            {'x': world_edge, 'z': -45, 'width': 8, 'depth': 30},
-            {'x': world_edge, 'z': 45, 'width': 8, 'depth': 30},
-            
-            # West wall segments (avoiding road at z=0)
-            {'x': -world_edge, 'z': -45, 'width': 8, 'depth': 30},
-            {'x': -world_edge, 'z': 45, 'width': 8, 'depth': 30},
+        stats = {'north': 0, 'south': 0, 'east': 0, 'west': 0, 'corner': 0, 'seam': 0}
+        self.perimeter_edge_stats = stats
+        inner_limit = 45.0
+        outer_limit = 80.0
+        seam_depth = 4.0
+        min_segment = 3.0
+        edge_tile_width = 18.0
+        edge_tile_depth = 12.0
+        corner_tile = 16.0
+        edge_height_range = (12.0, 18.0)
+        corner_height_range = (18.0, 24.0)
+        edge_palette = [
+            (0.33, 0.33, 0.37, 1.0),
+            (0.28, 0.30, 0.34, 1.0),
+            (0.36, 0.34, 0.30, 1.0)
         ]
-        
-        for segment in perimeter_segments:
-            # Verify segment doesn't overlap roads
-            if not self.overlaps_road_area(segment['x'], segment['z'], segment['width'], segment['depth']):
-                building = {
-                    'x': segment['x'],
-                    'z': segment['z'],
-                    'width': segment['width'],
-                    'height': building_height,
-                    'depth': segment['depth'],
-                    'color': wall_color,
-                    'theme': 'perimeter'
-                }
-                self.buildings.append(building)
-                perimeter_buildings.append(building)
-        
+        corner_palette = [
+            (0.22, 0.24, 0.30, 1.0),
+            (0.26, 0.28, 0.32, 1.0),
+            (0.24, 0.22, 0.28, 1.0)
+        ]
+        road_half = (getattr(self.road_system, 'road_width', 15.0) / 2.0) + 0.5
+        vertical_roads = getattr(self.road_system, 'vertical_roads', [-30, 0, 30])
+        horizontal_roads = getattr(self.road_system, 'horizontal_roads', [-30, 0, 30])
+
+        def span_ranges(start, end, preferred_size):
+            ranges = []
+            cursor = start
+            while cursor < end - 1e-3:
+                seg_end = min(cursor + preferred_size, end)
+                ranges.append((cursor, seg_end))
+                cursor = seg_end
+            return ranges
+
+        def carve_road_gaps(ranges, road_values):
+            carved = []
+            for seg_start, seg_end in ranges:
+                segments = [(seg_start, seg_end)]
+                for road in road_values:
+                    cut_start = road - road_half
+                    cut_end = road + road_half
+                    next_segments = []
+                    for sub_start, sub_end in segments:
+                        if sub_end <= cut_start or sub_start >= cut_end:
+                            next_segments.append((sub_start, sub_end))
+                            continue
+                        if sub_start < cut_start:
+                            next_segments.append((sub_start, cut_start))
+                        if cut_end < sub_end:
+                            next_segments.append((cut_end, sub_end))
+                    segments = [s for s in next_segments if s[1] - s[0] >= min_segment]
+                carved.extend(segments)
+            return carved
+
+        def ranges_to_spans(ranges):
+            return [((start + end) / 2.0, end - start) for start, end in ranges if end - start >= min_segment]
+
+        def add_perimeter_building(center_x, center_z, width, depth, height_range, palette, zone):
+            if abs(center_x) > outer_limit + 0.1 or abs(center_z) > outer_limit + 0.1:
+                return
+            if self.overlaps_road_area(center_x, center_z, width, depth):
+                return
+            building = {
+                'x': center_x,
+                'z': center_z,
+                'width': width,
+                'depth': depth,
+                'height': random.uniform(*height_range),
+                'color': random.choice(palette),
+                'theme': 'perimeter'
+            }
+            self.buildings.append(building)
+            perimeter_buildings.append(building)
+            if zone in stats:
+                stats[zone] += 1
+
+        # North/South belts
+        x_long_ranges = carve_road_gaps(span_ranges(-outer_limit, outer_limit, edge_tile_width), vertical_roads)
+        x_spans = ranges_to_spans(x_long_ranges)
+        z_band_spans = ranges_to_spans(span_ranges(inner_limit, outer_limit, edge_tile_depth))
+        for z_center, depth in z_band_spans:
+            for x_center, width in x_spans:
+                add_perimeter_building(x_center, z_center, width, depth, edge_height_range, edge_palette, 'north')
+                add_perimeter_building(x_center, -z_center, width, depth, edge_height_range, edge_palette, 'south')
+
+        # East/West belts
+        z_long_ranges = carve_road_gaps(span_ranges(-outer_limit, outer_limit, edge_tile_width), horizontal_roads)
+        z_spans = ranges_to_spans(z_long_ranges)
+        x_band_spans = ranges_to_spans(span_ranges(inner_limit, outer_limit, edge_tile_depth))
+        for x_center, width in x_band_spans:
+            for z_center, depth in z_spans:
+                add_perimeter_building(x_center, z_center, width, depth, edge_height_range, edge_palette, 'east')
+                add_perimeter_building(-x_center, z_center, width, depth, edge_height_range, edge_palette, 'west')
+
+        # Corner grids for skyline depth
+        corner_spans = ranges_to_spans(span_ranges(inner_limit, outer_limit, corner_tile))
+        for x_center, width in corner_spans:
+            for z_center, depth in corner_spans:
+                add_perimeter_building(x_center, z_center, width, depth, corner_height_range, corner_palette, 'corner')
+                add_perimeter_building(-x_center, z_center, width, depth, corner_height_range, corner_palette, 'corner')
+                add_perimeter_building(x_center, -z_center, width, depth, corner_height_range, corner_palette, 'corner')
+                add_perimeter_building(-x_center, -z_center, width, depth, corner_height_range, corner_palette, 'corner')
+
+        # Outer seam flush with ±80 to hide any remaining voids
+        seam_spans = ranges_to_spans(span_ranges(outer_limit - seam_depth, outer_limit, seam_depth))
+        for z_center, depth in seam_spans:
+            for x_center, width in x_spans:
+                add_perimeter_building(x_center, z_center, width, depth, edge_height_range, edge_palette, 'seam')
+                add_perimeter_building(x_center, -z_center, width, depth, edge_height_range, edge_palette, 'seam')
+        for x_center, width in seam_spans:
+            for z_center, depth in z_spans:
+                add_perimeter_building(x_center, z_center, width, depth, edge_height_range, edge_palette, 'seam')
+                add_perimeter_building(-x_center, z_center, width, depth, edge_height_range, edge_palette, 'seam')
+
         return perimeter_buildings
-        """Determine building theme for 4-block system with distinct districts"""
-        # Create themed districts for the 4 blocks
-        if center_x < 0 and center_z < 0:
-            return 'office'      # Top-left: Downtown office district
-        elif center_x > 0 and center_z < 0:
-            return 'commercial'  # Top-right: Commercial district 
-        elif center_x < 0 and center_z > 0:
-            return 'residential' # Bottom-left: Residential district
-        else:
-            return 'residential' # Bottom-right: More residential
     
 
     

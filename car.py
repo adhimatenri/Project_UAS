@@ -21,7 +21,7 @@ class Car:
         self.auto_mode = False  # Manual mode
         
         # City boundaries (optimized for 3x3 grid)
-        self.world_bounds = 75.0  # Reduced from 95 to 75 units
+        self.world_bounds = 80.0  # Matches perimeter belt limit
         self.road_system = None  # Reference to road system
         
         # Warna
