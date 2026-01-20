@@ -60,7 +60,7 @@ class City:
             attempted_count += block_attempts
         
         print(f"   Building distribution: {attempted_count} attempted, {successful_count} successful")
-        print(f"   🏢 Perfect coverage: {len(self.buildings)} buildings with zero gaps")
+        print(f"   🏢 Comprehensive coverage: {len(self.buildings)} total buildings")
     
     def generate_perfect_block_coverage(self, block, theme):
         """Generate perfect-fit buildings that exactly fill block segments with zero gaps"""
@@ -84,80 +84,72 @@ class City:
         return block_buildings, attempts
     
     def calculate_exact_segments(self, block):
-        """Calculate 4 precise segments per block avoiding roads at [-30, 0, 30]"""
+        """Calculate buildable segments with generous road clearance (never on roads)"""
         segments = []
         
-        # Block boundaries
-        block_radius = block['size'] / 2.0  # 25 units
+        # Block info
         center_x = block['center_x']
         center_z = block['center_z']
+        block_radius = block['size'] / 2.0
+        block_left = center_x - block_radius
+        block_right = center_x + block_radius
+        block_top = center_z - block_radius
+        block_bottom = center_z + block_radius
         
-        # Road positions: [-30, 0, 30] with 15-unit width (±7.5 from center)
+        # Road/clearance settings
+        road_positions = [-30, 0, 30]
         road_half_width = 7.5
+        sidewalk_buffer = 2.5   # Extra breathing room beyond painted road
+        road_clearance = road_half_width + sidewalk_buffer  # 10 units from road center
+        min_segment_size = 8.0
+        inner_padding = 0.5     # Prevent floating point bleed into roads
         
-        # Calculate segments that avoid roads
-        # For block at (-15, -15): roads at x=[-30, 0, 30] and z=[-30, 0, 30]
-        # Available x ranges: block_center ± 25, avoiding roads
-        # Available z ranges: block_center ± 25, avoiding roads
+        def compute_safe_ranges(range_start, range_end):
+            """Return axis ranges fully outside any road exclusion zone"""
+            safe_ranges = []
+            current_start = range_start
+            for road in road_positions:
+                exclusion_start = road - road_clearance
+                exclusion_end = road + road_clearance
+                if exclusion_end <= range_start:
+                    continue
+                if exclusion_start >= range_end:
+                    break
+                if exclusion_start > current_start:
+                    safe_ranges.append((current_start, min(exclusion_start, range_end)))
+                current_start = max(current_start, min(exclusion_end, range_end))
+                if current_start >= range_end:
+                    break
+            if current_start < range_end:
+                safe_ranges.append((current_start, range_end))
+            
+            # Apply padding and size filter
+            cleaned_ranges = []
+            for start, end in safe_ranges:
+                if end - start < min_segment_size:
+                    continue
+                padded_start = start + inner_padding
+                padded_end = end - inner_padding
+                if padded_end - padded_start >= min_segment_size:
+                    cleaned_ranges.append((padded_start, padded_end))
+            return cleaned_ranges
         
-        # Determine which roads intersect this block
-        block_left = center_x - block_radius    # -40
-        block_right = center_x + block_radius   # +10
-        block_top = center_z - block_radius     # -40  
-        block_bottom = center_z + block_radius  # +10
+        safe_x_ranges = compute_safe_ranges(block_left, block_right)
+        safe_z_ranges = compute_safe_ranges(block_top, block_bottom)
         
-        # Find road intersections within this block
-        intersecting_x_roads = []
-        for road_x in [-30, 0, 30]:
-            if block_left <= road_x <= block_right:
-                intersecting_x_roads.append(road_x)
-        
-        intersecting_z_roads = []
-        for road_z in [-30, 0, 30]:
-            if block_top <= road_z <= block_bottom:
-                intersecting_z_roads.append(road_z)
-        
-        # Create segments by dividing block around intersecting roads with proper clearance
-        road_clearance = road_half_width + 0.2  # Reduced clearance for better coverage
-        
-        x_boundaries = [block_left] + [r - road_clearance for r in intersecting_x_roads] + [r + road_clearance for r in intersecting_x_roads] + [block_right]
-        z_boundaries = [block_top] + [r - road_clearance for r in intersecting_z_roads] + [r + road_clearance for r in intersecting_z_roads] + [block_bottom]
-        
-        # Sort and remove duplicates
-        x_boundaries = sorted(list(set(x_boundaries)))
-        z_boundaries = sorted(list(set(z_boundaries)))
-        
-        # Create segments from boundary combinations with optimized selection
-        valid_segments = []
-        for i in range(len(x_boundaries) - 1):
-            for j in range(len(z_boundaries) - 1):
-                x_start = x_boundaries[i]
-                x_end = x_boundaries[i + 1]
-                z_start = z_boundaries[j]
-                z_end = z_boundaries[j + 1]
-                
-                width = x_end - x_start
+        for x_start, x_end in safe_x_ranges:
+            width = x_end - x_start
+            for z_start, z_end in safe_z_ranges:
                 depth = z_end - z_start
-                
-                # Accept segments with smaller minimum size for maximum coverage
-                if width >= 4.0 and depth >= 4.0:
-                    seg_center_x = (x_start + x_end) / 2.0
-                    seg_center_z = (z_start + z_end) / 2.0
-                    
-                    # Quick pre-filter: skip segments obviously on roads
-                    if not self.quick_road_check(seg_center_x, seg_center_z):
-                        valid_segments.append({
-                            'center_x': seg_center_x,
-                            'center_z': seg_center_z,
-                            'width': width,
-                            'depth': depth
-                        })
+                if width >= min_segment_size and depth >= min_segment_size:
+                    segments.append({
+                        'center_x': (x_start + x_end) / 2.0,
+                        'center_z': (z_start + z_end) / 2.0,
+                        'width': width,
+                        'depth': depth
+                    })
         
-        # Sort segments by size (largest first for better coverage)
-        valid_segments.sort(key=lambda s: s['width'] * s['depth'], reverse=True)
-        
-        print(f"   Block ({center_x}, {center_z}): Generated {len(valid_segments)} valid segments")
-        return valid_segments
+        return segments
     
     def quick_road_check(self, x, z):
         """Quick check if position is obviously on a road (center check only)"""
@@ -185,76 +177,136 @@ class City:
             'theme': theme
         }
     
-    def overlaps_road_area(self, center_x, center_z, width, depth):
-        """Precise road overlap detection for perfect-fit buildings"""
+    def wall_overlaps_road(self, center_x, center_z, width, depth):
+        """Wall-specific collision detection - only checks actual roads, not world boundaries"""
         if not self.road_system:
             return False
         
-        # Minimal buffer for mathematical precision only
-        buffer = 0.1
+        # Only check core road positions [-30, 0, 30] with realistic margins
+        road_positions = [-30, 0, 30]
+        road_half_width = 7.5  # 15-unit road width / 2
+        safety_margin = 2.0
         
-        # Check if building center is in road
-        if self.road_system.is_road_area(center_x, center_z, buffer=buffer):
-            return True
-        
-        # Check building corners with minimal buffer
+        # Check building center and corners against actual road areas only
         half_w = width / 2.0
         half_d = depth / 2.0
         
-        corners = [
-            (center_x - half_w, center_z - half_d),  # Top-left
-            (center_x + half_w, center_z - half_d),  # Top-right
-            (center_x - half_w, center_z + half_d),  # Bottom-left
-            (center_x + half_w, center_z + half_d)   # Bottom-right
+        test_points = [
+            (center_x, center_z),  # Center
+            (center_x - half_w, center_z - half_d),  # Corners
+            (center_x + half_w, center_z - half_d),
+            (center_x - half_w, center_z + half_d),
+            (center_x + half_w, center_z + half_d)
         ]
         
-        for x, z in corners:
-            if self.road_system.is_road_area(x, z, buffer=buffer):
+        for test_x, test_z in test_points:
+            # Check against horizontal roads
+            for road_z in road_positions:
+                if abs(test_z - road_z) <= road_half_width + safety_margin:
+                    return True
+            
+            # Check against vertical roads  
+            for road_x in road_positions:
+                if abs(test_x - road_x) <= road_half_width + safety_margin:
+                    return True
+        
+        return False
+    
+    def wall_overlaps_road(self, center_x, center_z, width, depth):
+        """Wall-specific collision detection - only checks actual roads, not world boundaries"""
+        if not self.road_system:
+            return False
+        
+        # Only check core road positions [-30, 0, 30] with realistic margins
+        road_positions = [-30, 0, 30]
+        road_half_width = 7.5  # 15-unit road width / 2
+        safety_margin = 2.0
+        
+        # Check building center and corners against actual road areas only
+        half_w = width / 2.0
+        half_d = depth / 2.0
+        
+        test_points = [
+            (center_x, center_z),  # Center
+            (center_x - half_w, center_z - half_d),  # Corners
+            (center_x + half_w, center_z - half_d),
+            (center_x - half_w, center_z + half_d),
+            (center_x + half_w, center_z + half_d)
+        ]
+        
+        for test_x, test_z in test_points:
+            # Check against horizontal roads
+            for road_z in road_positions:
+                if abs(test_z - road_z) <= road_half_width + safety_margin:
+                    return True
+            
+            # Check against vertical roads  
+            for road_x in road_positions:
+                if abs(test_x - road_x) <= road_half_width + safety_margin:
+                    return True
+        
+        return False
+
+    def overlaps_road_area(self, center_x, center_z, width, depth):
+        """Strict road overlap detection - matches calculate_exact_segments clearance"""
+        if not self.road_system:
+            return False
+        
+        road_positions = [-30, 0, 30]
+        road_half_width = 7.5
+        sidewalk_buffer = 2.5
+        road_clearance = road_half_width + sidewalk_buffer
+        
+        half_w = width / 2.0
+        half_d = depth / 2.0
+        
+        left = center_x - half_w
+        right = center_x + half_w
+        top = center_z - half_d
+        bottom = center_z + half_d
+        
+        # Check vertical roads
+        for road_x in road_positions:
+            exclusion_left = road_x - road_clearance
+            exclusion_right = road_x + road_clearance
+            if not (right <= exclusion_left or left >= exclusion_right):
+                return True
+        
+        # Check horizontal roads
+        for road_z in road_positions:
+            exclusion_top = road_z - road_clearance
+            exclusion_bottom = road_z + road_clearance
+            if not (bottom <= exclusion_top or top >= exclusion_bottom):
                 return True
         
         return False
     
     def generate_optimized_perimeter_walls(self):
-        """Generate optimized perimeter walls with exact edge coverage"""
+        """Generate comprehensive perimeter building system with complete coverage"""
         perimeter_buildings = []
-        world_edge = 72  # Optimized distance from center
-        building_height = 15  # Consistent wall height
-        wall_color = (0.4, 0.4, 0.4, 1.0)  # Neutral wall color
         
-        # Calculate exact perimeter segments to avoid road intersections
-        perimeter_segments = [
-            # North wall segments (avoiding road at x=0)
-            {'x': -45, 'z': world_edge, 'width': 30, 'depth': 8},
-            {'x': 45, 'z': world_edge, 'width': 30, 'depth': 8},
-            
-            # South wall segments (avoiding road at x=0)
-            {'x': -45, 'z': -world_edge, 'width': 30, 'depth': 8},
-            {'x': 45, 'z': -world_edge, 'width': 30, 'depth': 8},
-            
-            # East wall segments (avoiding road at z=0)
-            {'x': world_edge, 'z': -45, 'width': 8, 'depth': 30},
-            {'x': world_edge, 'z': 45, 'width': 8, 'depth': 30},
-            
-            # West wall segments (avoiding road at z=0)
-            {'x': -world_edge, 'z': -45, 'width': 8, 'depth': 30},
-            {'x': -world_edge, 'z': 45, 'width': 8, 'depth': 30},
-        ]
+        print("🏗️  Generating comprehensive perimeter system...")
         
-        for segment in perimeter_segments:
-            # Verify segment doesn't overlap roads
-            if not self.overlaps_road_area(segment['x'], segment['z'], segment['width'], segment['depth']):
-                building = {
-                    'x': segment['x'],
-                    'z': segment['z'],
-                    'width': segment['width'],
-                    'height': building_height,
-                    'depth': segment['depth'],
-                    'color': wall_color,
-                    'theme': 'perimeter'
-                }
-                self.buildings.append(building)
-                perimeter_buildings.append(building)
+        # Phase 1: Generate corner buildings (4 large corner zones)
+        corner_buildings = self.generate_corner_buildings()
+        perimeter_buildings.extend(corner_buildings)
+        print(f"   Phase 1: {len(corner_buildings)} corner buildings generated")
         
+        # Phase 2: Generate complete perimeter walls (100% edge coverage)
+        wall_buildings = self.generate_complete_perimeter_walls()
+        perimeter_buildings.extend(wall_buildings)
+        print(f"   Phase 2: {len(wall_buildings)} wall segments generated")
+        
+        # Phase 3: Generate inner perimeter rings (systematic area coverage)
+        ring_buildings = self.generate_inner_perimeter_rings()
+        perimeter_buildings.extend(ring_buildings)
+        print(f"   Phase 3: {len(ring_buildings)} ring buildings generated")
+        
+        # Add all perimeter buildings to main building list
+        for building in perimeter_buildings:
+            self.buildings.append(building)
+        
+        print(f"   Total perimeter buildings: {len(perimeter_buildings)}")
         return perimeter_buildings
         """Determine building theme for 4-block system with distinct districts"""
         # Create themed districts for the 4 blocks
@@ -271,6 +323,130 @@ class City:
     
 
     
+    def generate_corner_buildings(self):
+        """Generate 16 corner buildings (4 per corner) for complete corner coverage"""
+        corner_buildings = []
+        corner_height = 18
+        corner_color = (0.3, 0.3, 0.4, 1.0)
+        
+        # Each corner zone gets 4 buildings to fill completely
+        # Corner zones: ±45 to ±80 in both x and z
+        corner_specs = [
+            # Northeast corner (x: 45-80, z: 45-80)
+            {'x': 55, 'z': 55, 'w': 20, 'd': 20},
+            {'x': 55, 'z': 72, 'w': 20, 'd': 16},
+            {'x': 72, 'z': 55, 'w': 16, 'd': 20},
+            {'x': 72, 'z': 72, 'w': 16, 'd': 16},
+            # Northwest corner (x: -80 to -45, z: 45-80)
+            {'x': -55, 'z': 55, 'w': 20, 'd': 20},
+            {'x': -55, 'z': 72, 'w': 20, 'd': 16},
+            {'x': -72, 'z': 55, 'w': 16, 'd': 20},
+            {'x': -72, 'z': 72, 'w': 16, 'd': 16},
+            # Southeast corner (x: 45-80, z: -80 to -45)
+            {'x': 55, 'z': -55, 'w': 20, 'd': 20},
+            {'x': 55, 'z': -72, 'w': 20, 'd': 16},
+            {'x': 72, 'z': -55, 'w': 16, 'd': 20},
+            {'x': 72, 'z': -72, 'w': 16, 'd': 16},
+            # Southwest corner (x: -80 to -45, z: -80 to -45)
+            {'x': -55, 'z': -55, 'w': 20, 'd': 20},
+            {'x': -55, 'z': -72, 'w': 20, 'd': 16},
+            {'x': -72, 'z': -55, 'w': 16, 'd': 20},
+            {'x': -72, 'z': -72, 'w': 16, 'd': 16},
+        ]
+        
+        for spec in corner_specs:
+            corner_buildings.append({
+                'x': spec['x'], 'z': spec['z'],
+                'width': spec['w'], 'height': corner_height, 'depth': spec['d'],
+                'color': corner_color, 'theme': 'corner'
+            })
+        
+        return corner_buildings
+    
+    def generate_complete_perimeter_walls(self):
+        """Generate continuous perimeter walls - 6 per edge, zero gaps"""
+        wall_buildings = []
+        wall_height = 15
+        wall_color = (0.4, 0.4, 0.4, 1.0)
+        
+        # Continuous wall segments covering -45 to +45 range on each edge
+        # Corners (±45 to ±80) handled by corner_buildings
+        
+        # North edge walls (z=72, x from -45 to 45)
+        for x_pos in [-36, -18, 0, 18, 36]:
+            wall_buildings.append({
+                'x': x_pos, 'z': 72, 'width': 20, 'height': wall_height,
+                'depth': 16, 'color': wall_color, 'theme': 'wall'
+            })
+        
+        # South edge walls (z=-72, x from -45 to 45)
+        for x_pos in [-36, -18, 0, 18, 36]:
+            wall_buildings.append({
+                'x': x_pos, 'z': -72, 'width': 20, 'height': wall_height,
+                'depth': 16, 'color': wall_color, 'theme': 'wall'
+            })
+        
+        # East edge walls (x=72, z from -45 to 45)
+        for z_pos in [-36, -18, 0, 18, 36]:
+            wall_buildings.append({
+                'x': 72, 'z': z_pos, 'width': 16, 'height': wall_height,
+                'depth': 20, 'color': wall_color, 'theme': 'wall'
+            })
+        
+        # West edge walls (x=-72, z from -45 to 45)
+        for z_pos in [-36, -18, 0, 18, 36]:
+            wall_buildings.append({
+                'x': -72, 'z': z_pos, 'width': 16, 'height': wall_height,
+                'depth': 20, 'color': wall_color, 'theme': 'wall'
+            })
+        
+        return wall_buildings
+    
+    def generate_inner_perimeter_rings(self):
+        """Generate dense inner ring buildings between city blocks and outer walls"""
+        ring_buildings = []
+        ring_color = (0.5, 0.4, 0.3, 1.0)
+        
+        # North inner row (z=50) - fills gap between city and north wall
+        for x in [-40, -20, 0, 20, 40]:
+            ring_buildings.append({
+                'x': x, 'z': 50, 'width': 18, 'height': 14, 'depth': 14,
+                'color': ring_color, 'theme': 'ring1'
+            })
+        
+        # South inner row (z=-50)
+        for x in [-40, -20, 0, 20, 40]:
+            ring_buildings.append({
+                'x': x, 'z': -50, 'width': 18, 'height': 14, 'depth': 14,
+                'color': ring_color, 'theme': 'ring1'
+            })
+        
+        # East inner column (x=50) - avoid overlapping with z=±50 rows
+        for z in [-25, 0, 25]:
+            ring_buildings.append({
+                'x': 50, 'z': z, 'width': 14, 'height': 14, 'depth': 18,
+                'color': ring_color, 'theme': 'ring1'
+            })
+        
+        # West inner column (x=-50)
+        for z in [-25, 0, 25]:
+            ring_buildings.append({
+                'x': -50, 'z': z, 'width': 14, 'height': 14, 'depth': 18,
+                'color': ring_color, 'theme': 'ring1'
+            })
+        
+        return ring_buildings
+        """Determine building theme for 4-block system with distinct districts"""
+        # Create themed districts for the 4 blocks
+        if center_x < 0 and center_z < 0:
+            return 'office'      # Top-left: Downtown office district
+        elif center_x > 0 and center_z < 0:
+            return 'commercial'  # Top-right: Commercial district 
+        elif center_x < 0 and center_z > 0:
+            return 'residential' # Bottom-left: Residential district
+        else:
+            return 'residential' # Bottom-right: More residential
+
     def get_block_theme(self, center_x, center_z):
         """Determine building theme for 4-block system with distinct districts"""
         # Create themed districts for the 4 blocks
