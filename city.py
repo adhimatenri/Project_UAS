@@ -8,6 +8,7 @@ class City:
         self.buildings = []
         self.stars = []
         self.road_system = None  # Will be set by main.py
+        self.city_display_list = None  # GPU-compiled geometry for performance
         
         # Building theme definitions optimized for dense coverage
         self.building_themes = {
@@ -504,14 +505,33 @@ class City:
                 glVertex3f(x * zr1, y * zr1, z1)
             glEnd()
 
+    def compile_static_geometry(self):
+        """Compile all static building geometry into a GPU display list for performance"""
+        if self.city_display_list is not None:
+            glDeleteLists(self.city_display_list, 1)
+        
+        self.city_display_list = glGenLists(1)
+        glNewList(self.city_display_list, GL_COMPILE)
+        
+        # Record all building drawing commands
+        for building in self.buildings:
+            self.draw_building(building)
+        
+        glEndList()
+        print(f"   ⚡ GPU display list compiled: {len(self.buildings)} buildings optimized")
+    
     def render(self):
-        """Render all city elements"""
+        """Render all city elements using GPU-accelerated display list"""
         # Draw stars and sky first (background)
         self.draw_sky()
         
-        # Draw all buildings
-        for building in self.buildings:
-            self.draw_building(building)
+        # Draw all buildings using compiled display list (massive performance boost)
+        if self.city_display_list is not None:
+            glCallList(self.city_display_list)
+        else:
+            # Fallback to immediate mode if display list not compiled
+            for building in self.buildings:
+                self.draw_building(building)
         
         # Draw street lights
         if self.road_system:
@@ -520,6 +540,13 @@ class City:
     def get_buildings_for_collision(self):
         """Return building list for collision detection (compatibility method)"""
         return self.buildings
+    
+    def cleanup(self):
+        """Clean up GPU resources (display lists)"""
+        if self.city_display_list is not None:
+            glDeleteLists(self.city_display_list, 1)
+            self.city_display_list = None
+            print("🧹 City display list cleaned up")
 
     def generate_stars(self):
         """Generate random stars"""

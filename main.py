@@ -38,7 +38,7 @@ class CitySimulation:
             (width, height), 
             pygame.OPENGL | pygame.DOUBLEBUF
         )
-        pygame.display.set_caption("3D City Simulation - Enhanced Maze City")
+        pygame.display.set_caption("Simulasi Kota 3D - Kelompok 7")
         
         # Initialize font untuk info
         pygame.font.init()
@@ -60,12 +60,6 @@ class CitySimulation:
         print("Panah Atas/Bawah - Naik/Turun Kamera (Free mode)")
         print("Panah Kiri/Kanan - Putar Kamera (Free mode)")
         print("PageUp/PageDown - Zoom In/Out (Free mode)")
-        print("")
-        print("🏙️ CITY FEATURES:")
-        print("- 4x4 Grid road network with intersections")
-        print("- Realistic lane markings and crosswalks")
-        print("- Buildings sorted by districts (office/commercial/residential)")
-        print("- City boundaries prevent escape")
         print("")
         print("ESC - Keluar")
         print("="*80)
@@ -389,6 +383,10 @@ class CitySimulation:
         print(f"🛣️ Road network: 3x3 grid with 9 intersections (64% fewer calculations)")
         print("📊 Real-time FPS monitoring enabled!")
         
+        # Compile city geometry to GPU display list for performance
+        print("⚡ Compiling static geometry to GPU...")
+        self.city.compile_static_geometry()
+        
         while self.running:
             # Simple FPS tracking
             self.current_fps = clock.get_fps()
@@ -408,10 +406,15 @@ class CitySimulation:
             # Cap at 60 FPS
             clock.tick(60)
         
+        # Cleanup GPU resources
+        self.city.cleanup()
+        self.road.cleanup()
+        
         pygame.quit()
         print(f"\n✅ Optimized simulation closed! Average FPS: {self.current_fps:.1f}")
 
 if __name__ == "__main__":
+    simulation = None
     try:
         simulation = CitySimulation()
         simulation.run()
@@ -419,3 +422,11 @@ if __name__ == "__main__":
         print(f"\n❌ Error: {e}")
         print("Pastikan semua library terinstall:")
         print("pip install pygame numpy PyOpenGL Pillow")
+    finally:
+        # Ensure cleanup even if error occurs
+        if simulation is not None:
+            try:
+                simulation.city.cleanup()
+                simulation.road.cleanup()
+            except:
+                pass
