@@ -8,6 +8,7 @@ from car import Car
 from city import City
 from road import Road
 from camera import Camera
+from weather import WeatherSystem
 
 class CitySimulation:
     def __init__(self, width=1280, height=720):
@@ -19,6 +20,7 @@ class CitySimulation:
         self.car = Car()    # Car second
         self.city = City()  # City last
         self.camera = Camera()
+        self.weather = WeatherSystem()  # Weather system for atmosphere
         
         # Link systems together for proper integration
         self.car.set_road_system(self.road)
@@ -77,6 +79,9 @@ class CitySimulation:
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
         # Night Mode Background
         glClearColor(0.05, 0.05, 0.2, 1.0)  # Warna langit malam (biru gelap)
+        
+        # Enable fog for atmospheric effect
+        self.weather.enable_fog()
     
 
     
@@ -238,6 +243,10 @@ class CitySimulation:
         # Update dan gambar mobil - PASS BUILDINGS FOR COLLISION
         self.car.update(self.city.get_buildings_for_collision())
         self.car.render()
+        
+        # Update and render weather (snowfall particles)
+        self.weather.update(self.camera)
+        self.weather.render()
         
         # UI informasi
         self.draw_ui()
@@ -443,6 +452,7 @@ class CitySimulation:
         # Cleanup GPU resources
         self.city.cleanup()
         self.road.cleanup()
+        self.weather.cleanup()
         
         pygame.quit()
         print(f"\n✅ Optimized simulation closed! Average FPS: {self.current_fps:.1f}")
@@ -462,5 +472,6 @@ if __name__ == "__main__":
             try:
                 simulation.city.cleanup()
                 simulation.road.cleanup()
+                simulation.weather.cleanup()
             except:
                 pass
